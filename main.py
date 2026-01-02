@@ -775,7 +775,7 @@ def main():
     else:
         root = ctk.CTk()
     app = App(root)
-    root.geometry("1100x700")
+    root.geometry("1300x1000")
     root.mainloop()
 
 
