@@ -3,9 +3,13 @@ name = "pet-frontend"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 dependencies = [
+    "biometeo",
     "customtkinter>=5.2.2",
     "pandas>=2.3.3",
     "tkinterdnd2>=0.4.3",
 ]
+
+[tool.uv.sources]
+biometeo = { path = "../pet/dist/biometeo-0.4.0-cp312-cp312-macosx_15_0_arm64.whl" }
