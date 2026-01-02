@@ -2,6 +2,7 @@ import inspect
 import io
 import sys
 import traceback
+import json
 from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
@@ -37,6 +38,79 @@ TARGET_FUNCTIONS = [
     "SET",
     "UTCI",
 ]
+
+# Citation suggestions shown after results table per function
+CITATIONS: Dict[str, str] = {
+    # UTCI
+    "UTCI": (
+        "For applying Universal Thermal Climate Index (UTCI), please cite:\n\n"
+        "- Bröde, P. et al. Deriving the operational procedure for the universal thermal climate index (UTCI). "
+        "International Journal of Biometeorology 56, 481–494 (2012). http://link.springer.com/10.1007/s00484-011-0454-1\n\n"
+        "- Jendritzky, G., de Dear, R. & Havenith, G. UTCI—why another thermal index? "
+        "International Journal of Biometeorology 56, 421–428 (2012). http://link.springer.com/10.1007/s00484-011-0513-7\n"
+    ),
+    # PMV
+    "PMV": (
+        "For calculation of Predicted Mean Vote (PMV), please cite:\n\n"
+        "- Fanger, P. O. Thermal comfort: Analysis and applications in environmental engineering, vol. 3 "
+        "(Danish Technical Press, 1972). http://www.cabdirect.org/abstracts/19722700268.html "
+        "https://linkinghub.elsevier.com/retrieve/pii/S0003687072800747\n"
+    ),
+    # SET*
+    "SET": (
+        "For using Outdoor Standard Effective Temperature (SET*), please cite:\n\n"
+        "- Gagge, A. P., Fobelets, A. P. & Berglund, L. G. Standard predictive index of human response to the thermal "
+        "environment. ASHRAE Transactions 92, 709–731 (1986). https://www.aivc.org/sites/default/files/airbase_2522.pdf "
+        "http://oceanrep.geomar.de/42985/\n"
+    ),
+    # PET
+    "PET": (
+        "For application of Physiologically Equivalent Temperature (PET), please cite:\n\n"
+        "- Höppe, P. The physiological equivalent temperature — a universal index for the biometeorological assessment of "
+        "the thermal environment. International Journal of Biometeorology 43, 71–75 (1999). "
+        "http://link.springer.com/10.1007/s004840050118\n"
+    ),
+    # mPET and quick variant share the same references
+    "mPET": (
+        "For application of modified Physiologically Equivalent Temperature (mPET), please cite:\n\n"
+        "- Chen, Y.-C. & Matzarakis, A. Modification of physiologically equivalent temperature. Journal of Heat Island "
+        "Institute International 9, 26–32 (2014). http://www.heat-island.jp/web_journal/Special_Issue_7JGM/15_chen.pdf\n\n"
+        "- Chen, Y.-C. & Matzarakis, A. Modified physiologically equivalent temperature—basics and applications for "
+        "western European climate. Theoretical and Applied Climatology 132, 1275–1289 (2018). "
+        "http://link.springer.com/10.1007/s00704-017-2158-x\n\n"
+        "- Chen, Y.-C., Chen, W.-N., Chou, C. & Matzarakis, A. Concepts and new implements for modified physiologically "
+        "equivalent temperature. Atmosphere 11, 694 (2020). https://www.mdpi.com/2073-4433/11/7/694\n"
+    ),
+    "mPET_quick": (
+        "For application of modified Physiologically Equivalent Temperature (mPET), please cite:\n\n"
+        "- Chen, Y.-C. & Matzarakis, A. Modification of physiologically equivalent temperature. Journal of Heat Island "
+        "Institute International 9, 26–32 (2014). http://www.heat-island.jp/web_journal/Special_Issue_7JGM/15_chen.pdf\n\n"
+        "- Chen, Y.-C. & Matzarakis, A. Modified physiologically equivalent temperature—basics and applications for "
+        "western European climate. Theoretical and Applied Climatology 132, 1275–1289 (2018). "
+        "http://link.springer.com/10.1007/s00704-017-2158-x\n\n"
+        "- Chen, Y.-C., Chen, W.-N., Chou, C. & Matzarakis, A. Concepts and new implements for modified physiologically "
+        "equivalent temperature. Atmosphere 11, 694 (2020). https://www.mdpi.com/2073-4433/11/7/694\n"
+    ),
+    # Tmrt
+    "Tmrt_calc": (
+        "For simulation of mean radiant temperature (Tmrt), please cite:\n\n"
+        "- Matzarakis, A., Rutz, F. & Mayer, H. Modelling radiation fluxes in simple and complex environments—application "
+        "of the RayMan model. International Journal of Biometeorology 51, 323–334 (2007). https://doi.org/10.1007/s00484-006-0061-8\n\n"
+        "- Matzarakis, A., Rutz, F. & Mayer, H. Modelling radiation fluxes in simple and complex environments: basics of the "
+        "RayMan model. International Journal of Biometeorology 54, 131–139 (2010). https://doi.org/10.1007/s00484-009-0261-0\n"
+    ),
+}
+
+# General note about the biometeo package review and wind speed reduction exponent reference
+CITATION_HEADER = (
+    "The citation about Python package biometeo is still under reviewing. For use of the function or thermal indices in biometeo, "
+    "the following citations are suggested.\n\n"
+)
+WIND_EXPONENT_NOTE = (
+    "For using the exponent equation as a reducing mechanism of wind speed from some height to 1.1 m, please also see:\n\n"
+    "- Matzarakis, A., Rocco, M. D. & Najjar, G. Thermal bioclimate in Strasbourg — the 2003 heat wave. Theoretical and Applied "
+    "Climatology 98, 209–220 (2009). http://link.springer.com/10.1007/s00704-009-0102-4\n"
+)
 
 
 def get_callable(name: str) -> Optional[Callable]:
@@ -111,8 +185,6 @@ class App:
         self.run_btn = ctk.CTkButton(top, text="Run", command=self.on_run_single)
         self.run_btn.pack(side="left", padx=8)
 
-        self.save_btn = ctk.CTkButton(top, text="Save Output", command=self.on_save_output)
-        self.save_btn.pack(side="left", padx=8)
 
         self.status_var = ctk.StringVar(value="Ready")
         self.status_lbl = ctk.CTkLabel(top, textvariable=self.status_var)
@@ -167,6 +239,42 @@ class App:
         yscroll.pack(side="right", fill="y")
         self.table.configure(yscrollcommand=yscroll.set)
 
+        # Output controls (format selector, Save, Copy) placed near the table
+        self.output_controls = ctk.CTkFrame(root)
+        self.output_controls.pack(side="bottom", fill="x", expand=False, padx=8, pady=(0, 8))
+        ctk.CTkLabel(self.output_controls, text="Output:").pack(side="left", padx=(8, 4))
+        ctk.CTkLabel(self.output_controls, text="Format:").pack(side="left", padx=(4, 4))
+        self.format_var = ctk.StringVar(value="csv")
+        self.format_menu = ctk.CTkOptionMenu(self.output_controls, values=["csv", "json"], variable=self.format_var)
+        self.format_menu.pack(side="left", padx=(0, 12))
+        self.save_btn = ctk.CTkButton(self.output_controls, text="Save Output", command=self.on_save_output)
+        self.save_btn.pack(side="left", padx=(0, 8))
+        self.copy_btn = ctk.CTkButton(self.output_controls, text="Copy to Clipboard", command=self.on_copy_output)
+        self.copy_btn.pack(side="left", padx=(0, 8))
+
+        # Progress area (shown during CSV processing)
+        self.progress_frame = ctk.CTkFrame(root)
+        self.progress_label = ctk.CTkLabel(self.progress_frame, text="Processing CSV…")
+        self.progress_label.pack(anchor="w", padx=8, pady=(4, 0))
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame)
+        self.progress_bar.set(0)
+        self.progress_bar.pack(fill="x", padx=8, pady=(4, 0))
+        self.progress_pct = ctk.CTkLabel(self.progress_frame, text="")
+        self.progress_pct.pack(anchor="e", padx=8, pady=(0, 4))
+        # hidden by default
+        try:
+            self.progress_frame.pack_forget()
+        except Exception:
+            pass
+
+        # Citation area below the table
+        self.citation_frame = ctk.CTkFrame(root)
+        self.citation_frame.pack(side="bottom", fill="both", expand=False, padx=8, pady=(0, 8))
+        ctk.CTkLabel(self.citation_frame, text="Citation suggestions").pack(anchor="w", padx=8, pady=(4, 0))
+        self.citation_text = ctk.CTkTextbox(self.citation_frame, height=140)
+        self.citation_text.pack(fill="both", expand=True, padx=8, pady=8)
+        self.citation_text.configure(state="disabled")
+
         # Storage for dynamic widgets and data
         self.param_entries: Dict[str, Any] = {}
         self.param_widgets: List[Any] = []
@@ -182,6 +290,7 @@ class App:
 
         # Initialize with default function
         self.on_function_change(self.fn_var.get())
+        self.clear_citation()
 
         if bm_import_error is not None:
             messagebox.showerror("Import error", f"Failed to import biometeo: {bm_import_error}")
@@ -200,6 +309,9 @@ class App:
         self.docs_text.delete("1.0", "end")
         self.docs_text.insert("1.0", doc)
         self.docs_text.configure(state="disabled")
+
+        # Clear citation when switching functions
+        self.clear_citation()
 
         # Build form
         sig = inspect.signature(fn)
@@ -248,6 +360,99 @@ class App:
                 pass
         self.param_widgets.clear()
         self.param_entries.clear()
+
+    def clear_citation(self):
+        try:
+            self.citation_text.configure(state="normal")
+            self.citation_text.delete("1.0", "end")
+            self.citation_text.configure(state="disabled")
+        except Exception:
+            pass
+
+    def update_citation(self, fn_name: str):
+        text_parts = [CITATION_HEADER]
+        body = CITATIONS.get(fn_name)
+        if body:
+            text_parts.append(body)
+        # Append wind exponent note for functions likely using wind reduction (UTCI, PET, mPET/mPET_quick, Tmrt)
+        if fn_name in {"UTCI", "PET", "mPET", "mPET_quick", "Tmrt_calc"}:
+            text_parts.append("\n" + WIND_EXPONENT_NOTE)
+        text = "".join(text_parts)
+        self.citation_text.configure(state="normal")
+        self.citation_text.delete("1.0", "end")
+        self.citation_text.insert("1.0", text)
+        self.citation_text.configure(state="disabled")
+
+    # ------- Progress helpers -------
+    def show_progress(self, total: int):
+        try:
+            # guard against zero
+            self._progress_total = max(1, int(total))
+        except Exception:
+            self._progress_total = 1
+        self._progress_done = 0
+        # reset visuals
+        try:
+            self.progress_bar.set(0)
+            self.progress_label.configure(text="Processing CSV…")
+            self.progress_pct.configure(text="0% (0/{} )".format(self._progress_total))
+        except Exception:
+            pass
+        # show frame
+        try:
+            self.progress_frame.pack(side="bottom", fill="x", expand=False, padx=8, pady=(0, 8))
+        except Exception:
+            pass
+
+    def update_progress(self, done: int, total: Optional[int] = None):
+        if total is None:
+            total = getattr(self, "_progress_total", 1)
+        # clamp
+        if total <= 0:
+            total = 1
+        if done < 0:
+            done = 0
+        if done > total:
+            done = total
+        self._progress_done = done
+        frac = done / total
+        try:
+            self.progress_bar.set(frac)
+            self.progress_pct.configure(text=f"{int(frac*100)}% ({done}/{total})")
+        except Exception:
+            pass
+
+    def finish_progress(self):
+        # hide frame and reset
+        try:
+            self.progress_bar.set(0)
+            self.progress_pct.configure(text="")
+            self.progress_frame.pack_forget()
+        except Exception:
+            pass
+
+    def set_controls_enabled(self, enabled: bool):
+        state = "normal" if enabled else "disabled"
+        try:
+            self.open_btn.configure(state=state)
+        except Exception:
+            pass
+        try:
+            self.run_btn.configure(state=state)
+        except Exception:
+            pass
+        try:
+            self.format_menu.configure(state=state)
+        except Exception:
+            pass
+        try:
+            self.save_btn.configure(state=state)
+        except Exception:
+            pass
+        try:
+            self.copy_btn.configure(state=state)
+        except Exception:
+            pass
 
     # ------- CSV Handling -------
     def on_open_csv(self):
@@ -337,16 +542,33 @@ class App:
                 kwargs[name] = parsed
             rows_args.append(kwargs)
 
+        # Prepare progress and disable controls
+        total = len(rows_args)
+        self.show_progress(total)
+        self.set_controls_enabled(False)
+        self.set_status("Processing CSV…")
+
         # Compute
         results: List[Any] = []
         errors: List[str] = []
-        for i, kwargs in enumerate(rows_args):
-            try:
-                res = fn(**kwargs)
-                results.append(res)
-            except Exception as e:
-                results.append(None)
-                errors.append(f"Row {i}: {e}")
+        try:
+            for i, kwargs in enumerate(rows_args):
+                try:
+                    res = fn(**kwargs)
+                    results.append(res)
+                except Exception as e:
+                    results.append(None)
+                    errors.append(f"Row {i}: {e}")
+                # update progress
+                self.update_progress(i + 1, total)
+                try:
+                    self.root.update_idletasks()
+                except Exception:
+                    pass
+        finally:
+            # ensure progress bar reaches 100% visual even on exceptions
+            self.update_progress(total, total)
+
         if errors:
             self.set_status(f"Completed with {len(errors)} errors; see console.")
             for e in errors:
@@ -359,6 +581,11 @@ class App:
         joined = pd.concat([df.reset_index(drop=True), out_df], axis=1)
         self.current_output_df = joined
         self.render_table(joined)
+        # Show citation suggestions
+        self.update_citation(fn_name)
+        # Finish progress and re-enable controls
+        self.finish_progress()
+        self.set_controls_enabled(True)
 
     # ------- Manual run -------
     def on_run_single(self):
@@ -402,6 +629,8 @@ class App:
             out_df = self.normalize_results([result])
             self.current_output_df = out_df
             self.render_table(out_df)
+            # Show citation suggestions
+            self.update_citation(fn_name)
             self.set_status("Completed")
         except Exception:
             buf = io.StringIO()
@@ -485,15 +714,55 @@ class App:
         if self.current_output_df is None or self.current_output_df.empty:
             messagebox.showinfo("Save Output", "No output to save yet.")
             return
-        path = filedialog.asksaveasfilename(title="Save output", defaultextension=".csv",
-                                            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])
+        fmt = "csv"
+        try:
+            fmt = (self.format_var.get() or "csv").lower()
+        except Exception:
+            pass
+        if fmt not in ("csv", "json"):
+            fmt = "csv"
+        # Configure dialog according to format
+        if fmt == "json":
+            defext = ".json"
+            ftypes = [("JSON files", "*.json"), ("All files", "*.*")]
+        else:
+            defext = ".csv"
+            ftypes = [("CSV files", "*.csv"), ("All files", "*.*")]
+        path = filedialog.asksaveasfilename(title="Save output", defaultextension=defext, filetypes=ftypes)
         if not path:
             return
         try:
-            self.current_output_df.to_csv(path, index=False)
+            if fmt == "json":
+                text = self.current_output_df.to_json(orient="records")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(text)
+            else:
+                self.current_output_df.to_csv(path, index=False)
             self.set_status(f"Saved to {path}")
         except Exception as e:
             messagebox.showerror("Save error", str(e))
+
+    def on_copy_output(self):
+        if self.current_output_df is None or self.current_output_df.empty:
+            messagebox.showinfo("Copy Output", "No output to copy yet.")
+            return
+        fmt = "csv"
+        try:
+            fmt = (self.format_var.get() or "csv").lower()
+        except Exception:
+            pass
+        if fmt not in ("csv", "json"):
+            fmt = "csv"
+        try:
+            if fmt == "json":
+                text = self.current_output_df.to_json(orient="records")
+            else:
+                text = self.current_output_df.to_csv(index=False)
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
+            self.set_status(f"Copied {fmt.upper()} to clipboard")
+        except Exception as e:
+            messagebox.showerror("Copy error", str(e))
 
     def set_status(self, text: str):
         self.status_var.set(text)
