@@ -145,7 +145,7 @@ dependencies = [
     { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 wheels = [
-    { filename = "biometeo-0.4.0-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:24cb4056db59572f7e60e9e938551a7a2d3ea6a81dff0e1dbce84bc1c16d4f46" },
+    { filename = "biometeo-0.4.0-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:8e4af056871cbd276136410a30d48ae7f937d50c70ba87b7b7969ee2c9df69eb" },
 ]
 
 [package.metadata]

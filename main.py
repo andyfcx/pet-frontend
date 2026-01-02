@@ -251,6 +251,8 @@ class App:
         self.save_btn.pack(side="left", padx=(0, 8))
         self.copy_btn = ctk.CTkButton(self.output_controls, text="Copy to Clipboard", command=self.on_copy_output)
         self.copy_btn.pack(side="left", padx=(0, 8))
+        self.clear_btn = ctk.CTkButton(self.output_controls, text="Clear", command=self.on_clear_output)
+        self.clear_btn.pack(side="left", padx=(0, 8))
 
         # Progress area (shown during CSV processing)
         self.progress_frame = ctk.CTkFrame(root)
@@ -451,6 +453,10 @@ class App:
             pass
         try:
             self.copy_btn.configure(state=state)
+        except Exception:
+            pass
+        try:
+            self.clear_btn.configure(state=state)
         except Exception:
             pass
 
@@ -763,6 +769,29 @@ class App:
             self.set_status(f"Copied {fmt.upper()} to clipboard")
         except Exception as e:
             messagebox.showerror("Copy error", str(e))
+
+    def on_clear_output(self):
+        # Clear the table and related output state
+        try:
+            # Reset headings and column widths
+            for col in self.table["columns"]:
+                try:
+                    self.table.heading(col, text="")
+                    self.table.column(col, width=0)
+                except Exception:
+                    pass
+            # Remove all rows
+            self.table.delete(*self.table.get_children())
+            # Remove column definitions
+            self.table["columns"] = []
+        except Exception:
+            pass
+        # Reset stored DataFrame
+        self.current_output_df = None
+        # Also clear citation suggestions to avoid stale refs
+        self.clear_citation()
+        # Update status
+        self.set_status("Cleared output")
 
     def set_status(self, text: str):
         self.status_var.set(text)
