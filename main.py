@@ -73,6 +73,7 @@ CITATIONS: Dict[str, str] = {
     # mPET and quick variant share the same references
     "mPET": (
         "For application of modified Physiologically Equivalent Temperature (mPET), please cite:\n\n"
+        "- Chen, YC. Thermal indices for human biometeorology based on Python. Sci Rep 13, 20825 (2023). https://doi.org/10.1038/s41598-023-47388-y\n\n"
         "- Chen, Y.-C. & Matzarakis, A. Modification of physiologically equivalent temperature. Journal of Heat Island "
         "Institute International 9, 26–32 (2014). http://www.heat-island.jp/web_journal/Special_Issue_7JGM/15_chen.pdf\n\n"
         "- Chen, Y.-C. & Matzarakis, A. Modified physiologically equivalent temperature—basics and applications for "
@@ -83,6 +84,7 @@ CITATIONS: Dict[str, str] = {
     ),
     "mPET_quick": (
         "For application of modified Physiologically Equivalent Temperature (mPET), please cite:\n\n"
+        "- Chen, YC. Thermal indices for human biometeorology based on Python. Sci Rep 13, 20825 (2023). https://doi.org/10.1038/s41598-023-47388-y\n\n"
         "- Chen, Y.-C. & Matzarakis, A. Modification of physiologically equivalent temperature. Journal of Heat Island "
         "Institute International 9, 26–32 (2014). http://www.heat-island.jp/web_journal/Special_Issue_7JGM/15_chen.pdf\n\n"
         "- Chen, Y.-C. & Matzarakis, A. Modified physiologically equivalent temperature—basics and applications for "
