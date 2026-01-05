@@ -138,20 +138,44 @@ wheels = [
 [[package]]
 name = "biometeo"
 version = "0.4.0"
-source = { path = "../pet/dist/biometeo-0.4.0-cp312-cp312-macosx_15_0_arm64.whl" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "hatch" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 wheels = [
-    { filename = "biometeo-0.4.0-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:8e4af056871cbd276136410a30d48ae7f937d50c70ba87b7b7969ee2c9df69eb" },
+    { url = "https://files.pythonhosted.org/packages/b8/cd/23197a52c66405c8ec02872876913abd2fab7767d15abdb7a0ccdf23b388/biometeo-0.4.0-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:01f8ac97f1d7acde6274007ed4190ed43aa886b632e36292392e2ddb687f22e7", size = 934271, upload-time = "2026-01-04T16:52:34.676Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/37/edcf4df1e1f79529915c13c14bb3ba1338511d4f3ccc8def0cd79d0fcd72/biometeo-0.4.0-cp310-cp310-macosx_15_0_x86_64.whl", hash = "sha256:a159472731c75456f9aa75be2a2030a711f9967fa5aa29f63415ee20601b5355", size = 1047331, upload-time = "2026-01-04T18:02:37.515Z" },
+    { url = "https://files.pythonhosted.org/packages/92/a9/e53b0d1f3dc9aedc9576fdaf6fb39989e05ec6ae3b9dfd3f78391359c961/biometeo-0.4.0-cp310-cp310-win_amd64.whl", hash = "sha256:f126bda3fe935068cea0512aa17bd5ea2925ff9b4b327b73eb165ab0dde4e511", size = 813452, upload-time = "2026-01-04T16:48:45.838Z" },
+    { url = "https://files.pythonhosted.org/packages/9e/05/7fcd62155bc2278c95fa0b63492901cda8ae11cf6635c7a440bec7df535e/biometeo-0.4.0-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:7cd07a2753fad74051bd5e686e5f62e392373547d0a1b49d782fb9d4f9663e0a", size = 1988544, upload-time = "2026-01-04T16:54:59.901Z" },
+    { url = "https://files.pythonhosted.org/packages/b2/0a/55ecb21770ff1417925dda4cbc11c6b98374e0417c6988838a07e0557268/biometeo-0.4.0-cp311-cp311-macosx_15_0_x86_64.whl", hash = "sha256:12b5908f283d33a94da91adda41778bf0c989e4566122402dd297914eda9b08f", size = 1968267, upload-time = "2026-01-04T18:04:32.056Z" },
+    { url = "https://files.pythonhosted.org/packages/54/68/eccb4b9e4bae0ad8c8b837fbdee04ad566981d082f554b590856c0c9a792/biometeo-0.4.0-cp311-cp311-win_amd64.whl", hash = "sha256:8178e69967adeb7463ed3b145e00adec6cf5730f19f7845a2f7dbc277e6e493f", size = 821806, upload-time = "2026-01-04T16:48:22.471Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/85/c2f7820495305ea294476da919f0da49fa859d7e924e5848b0b3bfcee303/biometeo-0.4.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:42a1924baf02b1b50c620574c78fc2c5e34677fe1dde6bcef51e29d807ec9692", size = 1823083, upload-time = "2026-01-04T16:55:46.962Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/44/399f85b8e4eab13aa05612bc9f8fc59865ad9ebcb0946599dec9e39746fb/biometeo-0.4.0-cp312-cp312-macosx_15_0_x86_64.whl", hash = "sha256:38b5e54c81a5bbb77148601f281ed186b472381da13e107444082122dc76cdf7", size = 1832479, upload-time = "2026-01-04T18:05:56.486Z" },
+    { url = "https://files.pythonhosted.org/packages/b8/e1/23b6d13907312c46ec9c752289d3c6bafb70170fd022f7da0c2a6f1fefe8/biometeo-0.4.0-cp312-cp312-win_amd64.whl", hash = "sha256:76f505a1f78e570f9fcf391f302bfe3452d80fd8855e6a58b3004597e95f8f3e", size = 764051, upload-time = "2026-01-04T16:49:22.867Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/fd/0a3dfb461f4f1a72d543f2d03720d0248b48fdf39c0b4e6e51c46ef25a66/biometeo-0.4.0-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:048ce8fbc3d2bbc46949ecf1705f04b5c60ac1f64bccb2f9ca5c70ae822dc641", size = 854986, upload-time = "2026-01-04T16:54:40.948Z" },
+    { url = "https://files.pythonhosted.org/packages/12/eb/0be36a35fb77169455acdb25751162477c08c39e80e6e269d79c36cd8830/biometeo-0.4.0-cp313-cp313-macosx_15_0_x86_64.whl", hash = "sha256:eafcc9eecf7737dd5ae96190afea3a52a23dfd6e9dd63d7ddc5e4ceab06af402", size = 1829901, upload-time = "2026-01-04T18:06:48.088Z" },
+    { url = "https://files.pythonhosted.org/packages/83/aa/e45a35c7740586da48f9074282ace694b896b05647b1ebeef2437b8ee1b5/biometeo-0.4.0-cp313-cp313-win_amd64.whl", hash = "sha256:0e4574e4ab0c774a9aad49fdff94b3fa4117158f717b1fbc3971b40bf66420b7", size = 761978, upload-time = "2026-01-04T16:48:46.731Z" },
+]
+
+[[package]]
+name = "biometeo-frontend"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "biometeo" },
+    { name = "customtkinter" },
+    { name = "pandas" },
+    { name = "tkinterdnd2" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "hatch", specifier = ">=1.14.2" },
-    { name = "numpy", specifier = ">=1.19.2" },
+    { name = "biometeo", specifier = "==0.4.0" },
+    { name = "customtkinter", specifier = ">=5.2.2" },
+    { name = "pandas", specifier = ">=2.3.3" },
+    { name = "tkinterdnd2", specifier = ">=0.4.3" },
 ]
 
 [[package]]
@@ -773,25 +797,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ca/bc/f35b8446f4531a7cb215605d100cd88b7ac6f44ab3fc94870c120ab3adbf/pathspec-0.12.1.tar.gz", hash = "sha256:a482d51503a1ab33b1c67a6c3813a26953dbdc71c31dacaef9a838c4e29f5712", size = 51043, upload-time = "2023-12-10T22:30:45Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/20/ff623b09d963f88bfde16306a54e12ee5ea43e9b597108672ff3a408aad6/pathspec-0.12.1-py3-none-any.whl", hash = "sha256:a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08", size = 31191, upload-time = "2023-12-10T22:30:43.14Z" },
-]
-
-[[package]]
-name = "pet-frontend"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "biometeo" },
-    { name = "customtkinter" },
-    { name = "pandas" },
-    { name = "tkinterdnd2" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "biometeo", path = "../pet/dist/biometeo-0.4.0-cp312-cp312-macosx_15_0_arm64.whl" },
-    { name = "customtkinter", specifier = ">=5.2.2" },
-    { name = "pandas", specifier = ">=2.3.3" },
-    { name = "tkinterdnd2", specifier = ">=0.4.3" },
 ]
 
 [[package]]
