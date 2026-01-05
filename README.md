@@ -1,6 +1,12 @@
 # Description
 A friendly UI app designed for biometeo, shows function documentation, default values
 
+## Installation and launch
+`pip install biometeo-frontend`
+
+`(venv) $ biometeo-front`
+
+
 ## Usage
 1. Select the function you would like to use
 2. Input the function args or select your csv file with corresponding variable name (Calculate automatically). You can also drag it.
