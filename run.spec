@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
 
 ROOT = Path.cwd()
@@ -25,6 +25,7 @@ a = Analysis(
         "customtkinter",
         "pandas",
         "biometeo",
+        *collect_submodules("biometeo"),
     ],
     hookspath=[],
     hooksconfig={},
