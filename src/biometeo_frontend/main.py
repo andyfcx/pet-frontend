@@ -117,6 +117,75 @@ WIND_EXPONENT_NOTE = (
 )
 
 
+# Grouping of input parameters into labeled sections in the form.
+# Any parameter not listed here falls back into the "other" group.
+GROUP_ORDER = ["geo_time", "physio", "meteo", "other"]
+GROUP_TITLES: Dict[str, str] = {
+    "geo_time": "Date/Time & Location",
+    "physio": "Physiological Info",
+    "meteo": "Meteorological Data",
+    "other": "Other Parameters",
+}
+PARAM_GROUP_MAP: Dict[str, str] = {
+    # Date/time + geographic info
+    "day_of_year": "geo_time",
+    "hour_of_day": "geo_time",
+    "longitude": "geo_time",
+    "latitude": "geo_time",
+    "sea_level_height": "geo_time",
+    "timezone_offset": "geo_time",
+    # Physiological info
+    "ht": "physio",
+    "mbody": "physio",
+    "age": "physio",
+    "sex": "physio",
+    "icl": "physio",
+    "clo_auto": "physio",
+    "work": "physio",
+    "pos": "physio",
+    # Meteorological data
+    "Ta": "meteo",
+    "VP": "meteo",
+    "RH": "meteo",
+    "v": "meteo",
+    "Tmrt": "meteo",
+    "N": "meteo",
+    "G": "meteo",
+    "DGratio": "meteo",
+    "Tob": "meteo",
+    "ltf": "meteo",
+    "OmegaF": "meteo",
+    "alb": "meteo",
+    "albhum": "meteo",
+    "RedGChk": "meteo",
+    "foglimit": "meteo",
+    "bowen": "meteo",
+}
+LABEL_ALIASES: Dict[str, str] = {
+    "day_of_year": "Day of Year",
+    "hour_of_day": "Hour of Day",
+    "longitude": "Longitude",
+    "latitude": "Latitude",
+    "sea_level_height": "Altitude",
+    "timezone_offset": "Timezone",
+    "ht": "Height (ht)",
+    "mbody": "Weight (mbody)",
+    "age": "Age",
+    "sex": "Gender (sex)",
+    "icl": "Clothing (Icl)",
+    "clo_auto": "Auto Clothing",
+    "work": "Activity (work)",
+    "pos": "Position (pos)",
+    "Ta": "Air Temp (Ta)",
+    "VP": "Vapor Pressure (VP)",
+    "RH": "Rel. Humidity (RH)",
+    "v": "Wind Speed (v)",
+    "Tmrt": "Mean Radiant Temp (Tmrt)",
+    "N": "Cloud Cover (N)",
+    "G": "Global Radiation (G)",
+}
+
+
 def get_callable(name: str) -> Optional[Callable]:
     if bm is None:
         return None
@@ -222,7 +291,7 @@ class App:
         middle = self.middle
         self.middle.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
 
-        self.form_frame = ctk.CTkScrollableFrame(middle, width=400)
+        self.form_frame = ctk.CTkScrollableFrame(middle, width=560)
         self.form_frame.pack(side="left", fill="both", expand=False, padx=(0, 8))
 
         self.docs_frame = ctk.CTkFrame(middle)
@@ -357,39 +426,60 @@ class App:
         # Clear citation when switching functions
         self.clear_citation()
 
-        # Build form
+        # Build form, grouped into labeled sections (date/time+location,
+        # physiological info, meteorological data, other).
         sig = inspect.signature(fn)
-        for name, param in sig.parameters.items():
-            if name in ("self", "cls"):
+        params = [(n, p) for n, p in sig.parameters.items() if n not in ("self", "cls")]
+        grouped: Dict[str, List] = {key: [] for key in GROUP_ORDER}
+        for name, param in params:
+            grouped[PARAM_GROUP_MAP.get(name, "other")].append((name, param))
+
+        max_cols = 4
+        for group_key in GROUP_ORDER:
+            items = grouped[group_key]
+            if not items:
                 continue
-            ann = param.annotation
-            default = None if param.default is inspect._empty else param.default
-            required = param.default is inspect._empty
 
-            # Label
-            label_text = name
-            if required:
-                label_text += " *"
-            else:
-                label_text += f" (default={default})"
-            lbl = ctk.CTkLabel(self.form_frame, text=label_text)
-            lbl.pack(anchor="w", padx=8, pady=(6, 0))
-            self.param_widgets.append(lbl)
+            section = ctk.CTkFrame(self.form_frame)
+            section.pack(fill="x", padx=4, pady=(8, 4))
+            self.param_widgets.append(section)
 
-            # Entry / Checkbox for bool
-            if ann in (bool, "bool") or isinstance(default, bool):
-                var = ctk.BooleanVar(value=bool(default) if default is not None else False)
-                cb = ctk.CTkCheckBox(self.form_frame, text="True/False", variable=var)
-                cb.pack(fill="x", padx=8, pady=(0, 6))
-                self.param_entries[name] = ("bool", var)
-                self.param_widgets.append(cb)
-            else:
-                entry = ctk.CTkEntry(self.form_frame)
-                if default is not None:
-                    entry.insert(0, str(default))
-                entry.pack(fill="x", padx=8, pady=(0, 6))
-                self.param_entries[name] = (ann, entry)
-                self.param_widgets.append(entry)
+            title = ctk.CTkLabel(
+                section, text=GROUP_TITLES[group_key],
+                font=ctk.CTkFont(weight="bold"),
+            )
+            title.grid(row=0, column=0, columnspan=max_cols, sticky="w", padx=6, pady=(6, 4))
+
+            for idx, (name, param) in enumerate(items):
+                row = 1 + (idx // max_cols) * 2
+                col = idx % max_cols
+
+                ann = param.annotation
+                default = None if param.default is inspect._empty else param.default
+                required = param.default is inspect._empty
+
+                label_text = LABEL_ALIASES.get(name, name)
+                if required:
+                    label_text += " *"
+                else:
+                    label_text += f" ({default})"
+                lbl = ctk.CTkLabel(section, text=label_text, anchor="w")
+                lbl.grid(row=row, column=col, sticky="w", padx=6, pady=(2, 0))
+
+                if ann in (bool, "bool") or isinstance(default, bool):
+                    var = ctk.BooleanVar(value=bool(default) if default is not None else False)
+                    cb = ctk.CTkCheckBox(section, text="", variable=var)
+                    cb.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 8))
+                    self.param_entries[name] = ("bool", var)
+                else:
+                    entry = ctk.CTkEntry(section, width=110)
+                    if default is not None:
+                        entry.insert(0, str(default))
+                    entry.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 8))
+                    self.param_entries[name] = (ann, entry)
+
+            for c in range(max_cols):
+                section.grid_columnconfigure(c, weight=1)
 
         # Hint
         hint = ctk.CTkLabel(self.form_frame, text="* Required field", text_color="gray")
@@ -698,14 +788,14 @@ class App:
         first = results[0]
         # If biometeo returns pandas
         if isinstance(first, pd.DataFrame):
-            return pd.concat(results, ignore_index=True)
-        if isinstance(first, pd.Series):
-            return pd.DataFrame(results)
+            df = pd.concat(results, ignore_index=True)
+        elif isinstance(first, pd.Series):
+            df = pd.DataFrame(results)
         # Dicts
-        if isinstance(first, dict):
-            return pd.DataFrame(results)
+        elif isinstance(first, dict):
+            df = pd.DataFrame(results)
         # Tuples/lists
-        if isinstance(first, (list, tuple)):
+        elif isinstance(first, (list, tuple)):
             max_len = max(len(r) if isinstance(r, (list, tuple)) else 1 for r in results)
             cols = [f"result_{i}" for i in range(max_len)]
             norm = []
@@ -715,9 +805,18 @@ class App:
                 else:
                     row = [r] + [None] * (max_len - 1)
                 norm.append(row)
-            return pd.DataFrame(norm, columns=cols)
-        # Scalars
-        return pd.DataFrame({"result": results})
+            df = pd.DataFrame(norm, columns=cols)
+        else:
+            # Scalars
+            df = pd.DataFrame({"result": results})
+        return self.round_numeric(df)
+
+    def round_numeric(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Round float-valued columns to 2 decimal places for display/output."""
+        for col in df.columns:
+            if pd.api.types.is_float_dtype(df[col]):
+                df[col] = df[col].round(2)
+        return df
 
     # ------- Table rendering and utilities -------
     def render_table(self, df: pd.DataFrame):
@@ -734,8 +833,14 @@ class App:
             self.table.column(c, width=120, anchor="center")
 
         for _, row in df.iterrows():
-            values = [row[c] for c in cols]
+            values = [self._format_cell(row[c]) for c in cols]
             self.table.insert("", "end", values=values)
+
+    @staticmethod
+    def _format_cell(value: Any) -> Any:
+        if isinstance(value, float):
+            return f"{value:.2f}"
+        return value
 
     def on_table_click_copy(self, event):
         # Identify row and column; copy the cell value to clipboard
@@ -781,11 +886,11 @@ class App:
             return
         try:
             if fmt == "json":
-                text = self.current_output_df.to_json(orient="records")
+                text = self.current_output_df.to_json(orient="records", double_precision=2)
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(text)
             else:
-                self.current_output_df.to_csv(path, index=False)
+                self.current_output_df.to_csv(path, index=False, float_format="%.2f")
             self.set_status(f"Saved to {path}")
         except Exception as e:
             messagebox.showerror("Save error", str(e))
@@ -803,9 +908,9 @@ class App:
             fmt = "csv"
         try:
             if fmt == "json":
-                text = self.current_output_df.to_json(orient="records")
+                text = self.current_output_df.to_json(orient="records", double_precision=2)
             else:
-                text = self.current_output_df.to_csv(index=False)
+                text = self.current_output_df.to_csv(index=False, float_format="%.2f")
             self.root.clipboard_clear()
             self.root.clipboard_append(text)
             self.set_status(f"Copied {fmt.upper()} to clipboard")
