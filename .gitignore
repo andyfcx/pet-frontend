@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.venv-dmg-arm64/
+.venv-dmg-x86_64/
+.venv-win/
+build/
+dist/
+.idea/
+.DS_Store
+pypi_token

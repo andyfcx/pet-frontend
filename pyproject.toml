@@ -20,3 +20,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/biometeo_frontend"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/biometeo_frontend/**", "README.md", "pyproject.toml"]
