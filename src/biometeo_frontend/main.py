@@ -29,6 +29,7 @@ else:
 
 
 APP_TITLE = "Biometeo UI"
+FISHEYE_LABEL = "SVF (Fisheye)"
 TARGET_FUNCTIONS = [
     "mPET",
     "mPET_quick",
@@ -37,6 +38,7 @@ TARGET_FUNCTIONS = [
     "PMV",
     "SET",
     "UTCI",
+    FISHEYE_LABEL,
 ]
 
 # Citation suggestions shown after results table per function
@@ -216,8 +218,9 @@ class App:
                 pass
 
         # Middle: left form, right docs
-        middle = ctk.CTkFrame(root)
-        middle.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
+        self.middle = ctk.CTkFrame(root)
+        middle = self.middle
+        self.middle.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
 
         self.form_frame = ctk.CTkScrollableFrame(middle, width=400)
         self.form_frame.pack(side="left", fill="both", expand=False, padx=(0, 8))
@@ -230,8 +233,9 @@ class App:
         self.docs_text.configure(state="disabled")
 
         # Bottom: output table
-        bottom = ctk.CTkFrame(root)
-        bottom.pack(side="bottom", fill="both", expand=True, padx=8, pady=(0, 8))
+        self.bottom_frame = ctk.CTkFrame(root)
+        bottom = self.bottom_frame
+        self.bottom_frame.pack(side="bottom", fill="both", expand=True, padx=8, pady=(0, 8))
 
         self.table = ttk.Treeview(bottom, show="headings")
         self.table.pack(side="left", fill="both", expand=True)
@@ -283,6 +287,7 @@ class App:
         self.param_entries: Dict[str, Any] = {}
         self.param_widgets: List[Any] = []
         self.current_output_df: Optional[pd.DataFrame] = None
+        self.fisheye_view = None
 
         # Drag and drop registration if available
         if TkinterDnD is not None and DND_FILES is not None and hasattr(root, "drop_target_register"):
@@ -299,8 +304,43 @@ class App:
         if bm_import_error is not None:
             messagebox.showerror("Import error", f"Failed to import biometeo: {bm_import_error}")
 
+    # ------- Fisheye SVF custom view -------
+    def _ensure_fisheye_view(self):
+        if self.fisheye_view is None:
+            from biometeo_frontend.fisheye_view import FisheyeView
+            self.fisheye_view = FisheyeView(self.root, bm)
+        return self.fisheye_view
+
+    def _show_fisheye_view(self):
+        view = self._ensure_fisheye_view()
+        self.open_btn.pack_forget()
+        self.run_btn.pack_forget()
+        self.drop_frame.pack_forget()
+        self.middle.pack_forget()
+        self.bottom_frame.pack_forget()
+        self.output_controls.pack_forget()
+        self.citation_frame.pack_forget()
+        view.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
+        self.clear_citation()
+        self.set_status("Fisheye SVF analysis mode")
+
+    def _hide_fisheye_view(self):
+        if self.fisheye_view is not None:
+            self.fisheye_view.pack_forget()
+        self.open_btn.pack(side="left", padx=8)
+        self.run_btn.pack(side="left", padx=8)
+        self.drop_frame.pack(side="top", fill="x", padx=8, pady=(0, 8))
+        self.middle.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
+        self.bottom_frame.pack(side="bottom", fill="both", expand=True, padx=8, pady=(0, 8))
+        self.output_controls.pack(side="bottom", fill="x", expand=False, padx=8, pady=(0, 8))
+        self.citation_frame.pack(side="bottom", fill="both", expand=False, padx=8, pady=(0, 8))
+
     # ------- Function and form handling -------
     def on_function_change(self, fn_name: str):
+        if fn_name == FISHEYE_LABEL:
+            self._show_fisheye_view()
+            return
+        self._hide_fisheye_view()
         fn = get_callable(fn_name)
         self.clear_form()
         if fn is None:

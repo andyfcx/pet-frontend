@@ -9,7 +9,7 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, co
 ROOT = Path.cwd()
 SRC = ROOT / "src"
 TARGET_ARCH = os.environ.get("TARGET_ARCH", "arm64")
-APP_VERSION = os.environ.get("APP_VERSION", "0.1.1")
+APP_VERSION = os.environ.get("APP_VERSION", "0.2.0")
 
 datas = collect_data_files("customtkinter")
 datas += collect_data_files("tkinterdnd2")
