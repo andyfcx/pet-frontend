@@ -29,7 +29,7 @@ else:
 
 
 APP_TITLE = "Biometeo UI"
-FISHEYE_LABEL = "SVF (Fisheye)"
+HIGHLIGHT_COLOR = ("#0f9d58", "#4ade80")
 TARGET_FUNCTIONS = [
     "mPET",
     "mPET_quick",
@@ -38,7 +38,6 @@ TARGET_FUNCTIONS = [
     "PMV",
     "SET",
     "UTCI",
-    FISHEYE_LABEL,
 ]
 
 # Citation suggestions shown after results table per function
@@ -183,6 +182,7 @@ LABEL_ALIASES: Dict[str, str] = {
     "Tmrt": "Mean Radiant Temp (Tmrt)",
     "N": "Cloud Cover (N)",
     "G": "Global Radiation (G)",
+    "OmegaF": "Sky View Factor (OmegaF)",
 }
 
 
@@ -301,6 +301,22 @@ class App:
         self.docs_text.pack(fill="both", expand=True, padx=8, pady=8)
         self.docs_text.configure(state="disabled")
 
+        # Fisheye photo -> Sky View Factor helper, shown only for Tmrt_calc.
+        # Collapsed by default; expanding lazily builds the (heavy) FisheyeView widget.
+        self.fisheye_section = ctk.CTkFrame(root, border_width=1, border_color="gray50")
+        self._fisheye_expanded = False
+        fisheye_header = ctk.CTkFrame(self.fisheye_section, fg_color="transparent")
+        fisheye_header.pack(fill="x")
+        self.fisheye_toggle_btn = ctk.CTkButton(
+            fisheye_header,
+            text="▸ Fisheye Photo → Sky View Factor (optional, fills OmegaF)",
+            command=self.on_toggle_fisheye_section,
+            fg_color="transparent",
+            anchor="w",
+        )
+        self.fisheye_toggle_btn.pack(fill="x", padx=4, pady=4)
+        self.fisheye_body = ctk.CTkFrame(self.fisheye_section, fg_color="transparent")
+
         # Bottom: output table
         self.bottom_frame = ctk.CTkFrame(root)
         bottom = self.bottom_frame
@@ -358,6 +374,13 @@ class App:
         self.current_output_df: Optional[pd.DataFrame] = None
         self.fisheye_view = None
 
+        # SVF value carried over from the fisheye photo analysis (persists across
+        # function switches so it can be reapplied when the user returns to Tmrt_calc)
+        self._fisheye_svf_info: Optional[Dict[str, Any]] = None
+        self._omega_default_text_color = None
+        self.omega_hint_label = None
+        self.omega_clear_btn = None
+
         # Drag and drop registration if available
         if TkinterDnD is not None and DND_FILES is not None and hasattr(root, "drop_target_register"):
             try:
@@ -373,43 +396,72 @@ class App:
         if bm_import_error is not None:
             messagebox.showerror("Import error", f"Failed to import biometeo: {bm_import_error}")
 
-    # ------- Fisheye SVF custom view -------
+    # ------- Fisheye SVF helper embedded in the Tmrt page -------
     def _ensure_fisheye_view(self):
         if self.fisheye_view is None:
             from biometeo_frontend.fisheye_view import FisheyeView
-            self.fisheye_view = FisheyeView(self.root, bm)
+            self.fisheye_view = FisheyeView(self.fisheye_body, bm, on_svf=self.on_fisheye_svf)
         return self.fisheye_view
 
-    def _show_fisheye_view(self):
-        view = self._ensure_fisheye_view()
-        self.open_btn.pack_forget()
-        self.run_btn.pack_forget()
-        self.drop_frame.pack_forget()
-        self.middle.pack_forget()
-        self.bottom_frame.pack_forget()
-        self.output_controls.pack_forget()
-        self.citation_frame.pack_forget()
-        view.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
-        self.clear_citation()
-        self.set_status("Fisheye SVF analysis mode")
+    def on_toggle_fisheye_section(self):
+        self._fisheye_expanded = not self._fisheye_expanded
+        if self._fisheye_expanded:
+            view = self._ensure_fisheye_view()
+            view.pack(fill="both", expand=True)
+            self.fisheye_body.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+            self.fisheye_toggle_btn.configure(text="▾ Fisheye Photo → Sky View Factor (optional, fills OmegaF)")
+        else:
+            self.fisheye_body.pack_forget()
+            self.fisheye_toggle_btn.configure(text="▸ Fisheye Photo → Sky View Factor (optional, fills OmegaF)")
 
-    def _hide_fisheye_view(self):
-        if self.fisheye_view is not None:
-            self.fisheye_view.pack_forget()
-        self.open_btn.pack(side="left", padx=8)
-        self.run_btn.pack(side="left", padx=8)
-        self.drop_frame.pack(side="top", fill="x", padx=8, pady=(0, 8))
-        self.middle.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
-        self.bottom_frame.pack(side="bottom", fill="both", expand=True, padx=8, pady=(0, 8))
-        self.output_controls.pack(side="bottom", fill="x", expand=False, padx=8, pady=(0, 8))
-        self.citation_frame.pack(side="bottom", fill="both", expand=False, padx=8, pady=(0, 8))
+    def on_fisheye_svf(self, svf: float, image_path: str):
+        self._fisheye_svf_info = {"svf": svf, "path": image_path}
+        # Only apply immediately if the Tmrt form (with an OmegaF field) is the active form;
+        # otherwise it is reapplied when the user switches back to Tmrt_calc.
+        if self.fn_var.get() != "Tmrt_calc":
+            return
+        self._apply_fisheye_svf_to_form()
+
+    def _apply_fisheye_svf_to_form(self):
+        info = self._fisheye_svf_info
+        if info is None:
+            return
+        ann, widget = self.param_entries.get("OmegaF", (None, None))
+        if not isinstance(widget, ctk.CTkEntry):
+            return
+        widget.delete(0, "end")
+        widget.insert(0, f"{info['svf']:.4f}")
+        widget.configure(text_color=HIGHLIGHT_COLOR)
+        if self.omega_hint_label is not None:
+            self.omega_hint_label.configure(
+                text=f"✓ SVF = {info['svf']:.4f} obtained from photo (source: {info['path']})",
+                text_color=HIGHLIGHT_COLOR,
+            )
+        if self.omega_clear_btn is not None:
+            self.omega_clear_btn.configure(state="normal")
+        self.set_status(f"Filled OmegaF = {info['svf']:.4f} from fisheye photo analysis")
+
+    def _clear_fisheye_svf(self):
+        self._fisheye_svf_info = None
+        ann, widget = self.param_entries.get("OmegaF", (None, None))
+        if isinstance(widget, ctk.CTkEntry):
+            widget.delete(0, "end")
+            widget.configure(text_color=self._omega_default_text_color)
+        if self.omega_hint_label is not None:
+            self.omega_hint_label.configure(text="")
+        if self.omega_clear_btn is not None:
+            self.omega_clear_btn.configure(state="disabled")
+        self.set_status("Cleared image-derived OmegaF")
+
+    def _update_fisheye_section_visibility(self, fn_name: str):
+        if fn_name == "Tmrt_calc":
+            self.fisheye_section.pack(side="top", fill="x", padx=8, pady=(0, 8), before=self.middle)
+        else:
+            self.fisheye_section.pack_forget()
 
     # ------- Function and form handling -------
     def on_function_change(self, fn_name: str):
-        if fn_name == FISHEYE_LABEL:
-            self._show_fisheye_view()
-            return
-        self._hide_fisheye_view()
+        self._update_fisheye_section_visibility(fn_name)
         fn = get_callable(fn_name)
         self.clear_form()
         if fn is None:
@@ -477,9 +529,26 @@ class App:
                         entry.insert(0, str(default))
                     entry.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 8))
                     self.param_entries[name] = (ann, entry)
+                    if name == "OmegaF":
+                        self._omega_default_text_color = entry.cget("text_color")
 
             for c in range(max_cols):
                 section.grid_columnconfigure(c, weight=1)
+
+            if any(name == "OmegaF" for name, _ in items):
+                hint_row = 1 + ((len(items) - 1) // max_cols) * 2 + 2
+                self.omega_hint_label = ctk.CTkLabel(section, text="", anchor="w", font=ctk.CTkFont(size=11))
+                self.omega_hint_label.grid(
+                    row=hint_row, column=0, columnspan=max_cols, sticky="w", padx=6, pady=(0, 2)
+                )
+                self.omega_clear_btn = ctk.CTkButton(
+                    section, text="Clear Photo SVF", width=140, command=self._clear_fisheye_svf, state="disabled"
+                )
+                self.omega_clear_btn.grid(row=hint_row + 1, column=0, sticky="w", padx=6, pady=(0, 8))
+                self.param_widgets.append(self.omega_hint_label)
+                self.param_widgets.append(self.omega_clear_btn)
+                if self._fisheye_svf_info is not None:
+                    self._apply_fisheye_svf_to_form()
 
         # Hint
         hint = ctk.CTkLabel(self.form_frame, text="* Required field", text_color="gray")
@@ -494,6 +563,8 @@ class App:
                 pass
         self.param_widgets.clear()
         self.param_entries.clear()
+        self.omega_hint_label = None
+        self.omega_clear_btn = None
 
     def clear_citation(self):
         try:

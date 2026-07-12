@@ -5,7 +5,7 @@ import os
 import shutil
 import tempfile
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import customtkinter as ctk
 from tkinter import Canvas, filedialog, messagebox
@@ -26,6 +26,7 @@ TIMELINE_W = 860
 TIMELINE_H = 260
 TIMELINE_PAD = 30
 THUMB_W = 320
+HIGHLIGHT_COLOR = ("#0f9d58", "#4ade80")
 
 
 class FisheyeView(ctk.CTkFrame):
@@ -35,9 +36,10 @@ class FisheyeView(ctk.CTkFrame):
     cx/cy/r overrides, so dragging the circle does not affect the computed SVF.
     """
 
-    def __init__(self, master, bm_module, **kwargs):
+    def __init__(self, master, bm_module, on_svf: Optional[Callable[[float, str], None]] = None, **kwargs):
         super().__init__(master, **kwargs)
         self.bm = bm_module
+        self._on_svf = on_svf
 
         self.image_path: Optional[str] = None
         self.original_image: Optional[Image.Image] = None
@@ -76,6 +78,9 @@ class FisheyeView(ctk.CTkFrame):
         img_row = ctk.CTkFrame(top)
         img_row.pack(side="top", fill="x")
         ctk.CTkButton(img_row, text="Select Fisheye Photo", command=self._on_select_image).pack(
+            side="left", padx=(0, 8)
+        )
+        ctk.CTkButton(img_row, text="Clear", command=self._on_clear_image, width=70).pack(
             side="left", padx=(0, 8)
         )
         self.image_path_label = ctk.CTkLabel(img_row, text="No image selected — you can also drop a photo onto the canvas below")
@@ -174,6 +179,7 @@ class FisheyeView(ctk.CTkFrame):
 
         self.svf_value_label = ctk.CTkLabel(results_frame, text="SVF: -", font=ctk.CTkFont(size=16, weight="bold"))
         self.svf_value_label.pack(side="top", anchor="w", padx=8)
+        self._svf_default_color = self.svf_value_label.cget("text_color")
         self.summary_label = ctk.CTkLabel(results_frame, text="")
         self.summary_label.pack(side="top", anchor="w", padx=8, pady=(0, 8))
 
@@ -257,6 +263,42 @@ class FisheyeView(ctk.CTkFrame):
         self.circle = dict(self.auto_circle)
         self._render_calibration_canvas()
         self._update_circle_labels()
+
+    def _on_clear_image(self):
+        self.image_path = None
+        self.original_image = None
+        self.auto_circle = None
+        self.circle = {"cx": 0, "cy": 0, "r": 0}
+        self._drag_mode = None
+        self._last_result = None
+        self._timeline_intervals = {}
+        self._tk_image = None
+
+        self.image_path_label.configure(text="No image selected — you can also drop a photo onto the canvas below")
+
+        self.canvas.configure(width=CALIB_MAX_DIM, height=CALIB_MAX_DIM)
+        self.canvas.delete("all")
+        self.canvas.create_text(
+            CALIB_MAX_DIM // 2, CALIB_MAX_DIM // 2, text="No image selected", fill="gray70", tags="placeholder"
+        )
+
+        for entry in (self.cx_entry, self.cy_entry, self.r_entry):
+            entry.delete(0, "end")
+
+        # CTkLabel.configure(image=None) leaves the underlying tkinter widget's
+        # own -image option pointing at the (about to be garbage-collected)
+        # PhotoImage, causing a later "image ... doesn't exist" TclError on
+        # redraw. Clear that raw option directly to avoid the dangling reference.
+        self.mask_image_label.configure(image=None, text="Sky mask (shown after analysis)")
+        self.mask_image_label._label.configure(image="")
+        self.mask_image_label.image = None
+        self.sunpath_image_label.configure(image=None, text="Sun-path overlay (shown after analysis)")
+        self.sunpath_image_label._label.configure(image="")
+        self.sunpath_image_label.image = None
+        self.svf_value_label.configure(text="SVF: -", text_color=self._svf_default_color)
+        self.summary_label.configure(text="")
+        self.timeline_canvas.delete("all")
+        self.status_label.configure(text="Select an image to begin")
 
     def _auto_detect_circle(self):
         # Mirrors the boundary-detection heuristic in fisheye.py's fisheye_svf()
@@ -458,8 +500,14 @@ class FisheyeView(ctk.CTkFrame):
             self.status_label.configure(text="An error occurred")
             return
         self._last_result = result
-        self.status_label.configure(text="Done")
         self._render_results(result)
+        if self._on_svf is not None:
+            self._on_svf(result["svf"], self.image_path)
+            self.status_label.configure(
+                text=f"Done — SVF = {result['svf']:.4f} filled into Tmrt_calc's OmegaF field"
+            )
+        else:
+            self.status_label.configure(text="Done")
 
     # ------------------------------------------------------------------
     # Results rendering
@@ -473,7 +521,7 @@ class FisheyeView(ctk.CTkFrame):
             label.configure(image=ctk_img, text="")
             label.image = ctk_img  # keep a reference so it is not garbage-collected
 
-        self.svf_value_label.configure(text=f"SVF: {result['svf']:.4f}")
+        self.svf_value_label.configure(text=f"SVF: {result['svf']:.4f}", text_color=HIGHLIGHT_COLOR)
         shaded_minutes = sum(iv["Duration_Mins"] for iv in result["intervals"])
         sunup_minutes = sum(1 for e in result["timeseries"] if e["Solar_Altitude"] > 0)
         visible_minutes = max(0, sunup_minutes - shaded_minutes)
