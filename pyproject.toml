@@ -1,6 +1,6 @@
 [project]
 name = "biometeo-frontend"
-version = "0.3.0"
+version = "0.3.1"
 description = "A friendly UI app designed for biometeo, shows function documentation, default values"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
