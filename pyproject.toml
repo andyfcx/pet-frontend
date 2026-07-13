@@ -5,7 +5,7 @@ description = "A friendly UI app designed for biometeo, shows function documenta
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "biometeo==0.5.1",
+    "biometeo==0.5.2",
     "customtkinter>=5.2.2",
     "pandas>=2.3.3",
     "tkinterdnd2>=0.4.3",

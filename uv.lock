@@ -4,7 +4,7 @@ requires-python = "==3.13.*"
 
 [[package]]
 name = "biometeo"
-version = "0.5.1"
+version = "0.5.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
@@ -12,10 +12,10 @@ dependencies = [
     { name = "pysolar" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/33/7b/d52c6109b6763cb23b4a94770b5e54ac1c4e2d0c84938f1c6440f699126c/biometeo-0.5.1-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:0cbe706eb49a0775ab0877906c20c93cbe43ac8c8c5bcdbfb91a6ef3b5dcbdf6", size = 903125, upload-time = "2026-07-10T06:03:59.655Z" },
-    { url = "https://files.pythonhosted.org/packages/24/45/d9e12e1562f49ff4bbabfdc6db2720adeb1862fab5fc095ebfcb82e620d6/biometeo-0.5.1-cp313-cp313-macosx_15_0_x86_64.whl", hash = "sha256:86ac24d669dc3feb725f25d8440b412505a80ee2cd848f8190133e0eb9a8399e", size = 1931557, upload-time = "2026-07-10T06:14:47.312Z" },
-    { url = "https://files.pythonhosted.org/packages/81/31/d37a2af17d495a543679e5af95af24344c4cc0636500afe1e5cfffa927f5/biometeo-0.5.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:70d96552eca37d4edf0343b7b3b97b04389c54e6b1ed1253a53ea94a8b6b3680", size = 7573176, upload-time = "2026-07-10T06:00:12.782Z" },
-    { url = "https://files.pythonhosted.org/packages/bd/ca/7d206058e48137a97de98613d9407ccb90bbce599375c8436db58e6649b0/biometeo-0.5.1-cp313-cp313-win_amd64.whl", hash = "sha256:5bf6320200ca01e9911baa0b9e2373238f6d77e1beae30dfd4e341276154af17", size = 830656, upload-time = "2026-07-10T06:01:37.071Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/60/0609485514e4e17d8872494ee182c697be4ad79cb1274b5b7c9ced8fd95b/biometeo-0.5.2-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:43b51450e4b99cfbd460d7e03ca1cbb9686447a743b6d1ba7e6ad86996fe7f31", size = 903359, upload-time = "2026-07-13T15:14:53.07Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/d8/4f4a00639ac9ca64f6b38a08a79cf41d08e267b8d922b1c192192c6b674a/biometeo-0.5.2-cp313-cp313-macosx_15_0_x86_64.whl", hash = "sha256:8616621d01eeb73a72ba755209c1a6ceeb144485ca0a5f2d43f4c5f7ab3613d0", size = 1931971, upload-time = "2026-07-13T15:26:12.359Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/2e/7cc4cd4c005dd334699eafee435a9358b0a9d8f94c56c50062decb88d5e8/biometeo-0.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9e581a8805c7fe7976303893270b2a7805da5b8acf118af1bef55c938ff7dc0e", size = 7574951, upload-time = "2026-07-13T15:10:56.69Z" },
+    { url = "https://files.pythonhosted.org/packages/58/5c/41f1432e5b3262c8d98c88b32cc177bf6c412df01452612c78c382176f4f/biometeo-0.5.2-cp313-cp313-win_amd64.whl", hash = "sha256:14813ff7fbfe99463f069cf78ee74ea00f61dee2b070866307d557a742b1fa6f", size = 830951, upload-time = "2026-07-13T15:11:54.363Z" },
 ]
 
 [[package]]
@@ -31,7 +31,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "biometeo", specifier = "==0.5.1" },
+    { name = "biometeo", specifier = "==0.5.2" },
     { name = "customtkinter", specifier = ">=5.2.2" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "tkinterdnd2", specifier = ">=0.4.3" },

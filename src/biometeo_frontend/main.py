@@ -159,6 +159,7 @@ PARAM_GROUP_MAP: Dict[str, str] = {
     "RedGChk": "meteo",
     "foglimit": "meteo",
     "bowen": "meteo",
+    "Is_Shaded": "meteo",
 }
 LABEL_ALIASES: Dict[str, str] = {
     "day_of_year": "Day of Year",
@@ -183,6 +184,7 @@ LABEL_ALIASES: Dict[str, str] = {
     "N": "Cloud Cover (N)",
     "G": "Global Radiation (G)",
     "OmegaF": "Sky View Factor (OmegaF)",
+    "Is_Shaded": "Shaded by Obstacle (Is_Shaded)",
 }
 
 
@@ -233,6 +235,17 @@ def parse_value(text: str, annotation: Any) -> Any:
         return int(s)
     except Exception:
         return s
+
+
+def fisheye_shading_at_hour(timeseries: List[Dict[str, Any]], hour_of_day: float):
+    """Return the fisheye shading flag and matched minute for a decimal hour."""
+    hour = float(hour_of_day)
+    if not 0 <= hour < 24:
+        raise ValueError("hour_of_day must be between 0 and 24")
+    minute_index = min(1439, int(round(hour * 60)))
+    time_str = f"{minute_index // 60:02d}:{minute_index % 60:02d}"
+    minute = next(item for item in timeseries if item["Time_Str"] == time_str)
+    return bool(minute["Is_Shaded"]), minute["Time_Str"]
 
 
 class App:
@@ -309,7 +322,7 @@ class App:
         fisheye_header.pack(fill="x")
         self.fisheye_toggle_btn = ctk.CTkButton(
             fisheye_header,
-            text="▸ Fisheye Photo → Sky View Factor (optional, fills OmegaF)",
+            text="▸ Fisheye Photo → Sky View Factor (optional, fills OmegaF & Is_Shaded)",
             command=self.on_toggle_fisheye_section,
             fg_color="transparent",
             anchor="w",
@@ -374,8 +387,8 @@ class App:
         self.current_output_df: Optional[pd.DataFrame] = None
         self.fisheye_view = None
 
-        # SVF value carried over from the fisheye photo analysis (persists across
-        # function switches so it can be reapplied when the user returns to Tmrt_calc)
+        # SVF and per-minute shading carried over from the fisheye photo analysis
+        # so both can be reapplied when the user returns to Tmrt_calc.
         self._fisheye_svf_info: Optional[Dict[str, Any]] = None
         self._omega_default_text_color = None
         self.omega_hint_label = None
@@ -409,13 +422,17 @@ class App:
             view = self._ensure_fisheye_view()
             view.pack(fill="both", expand=True)
             self.fisheye_body.pack(fill="both", expand=True, padx=4, pady=(0, 4))
-            self.fisheye_toggle_btn.configure(text="▾ Fisheye Photo → Sky View Factor (optional, fills OmegaF)")
+            self.fisheye_toggle_btn.configure(
+                text="▾ Fisheye Photo → Sky View Factor (optional, fills OmegaF & Is_Shaded)"
+            )
         else:
             self.fisheye_body.pack_forget()
-            self.fisheye_toggle_btn.configure(text="▸ Fisheye Photo → Sky View Factor (optional, fills OmegaF)")
+            self.fisheye_toggle_btn.configure(
+                text="▸ Fisheye Photo → Sky View Factor (optional, fills OmegaF & Is_Shaded)"
+            )
 
-    def on_fisheye_svf(self, svf: float, image_path: str):
-        self._fisheye_svf_info = {"svf": svf, "path": image_path}
+    def on_fisheye_svf(self, svf: float, image_path: str, timeseries: List[Dict[str, Any]]):
+        self._fisheye_svf_info = {"svf": svf, "path": image_path, "timeseries": timeseries}
         # Only apply immediately if the Tmrt form (with an OmegaF field) is the active form;
         # otherwise it is reapplied when the user switches back to Tmrt_calc.
         if self.fn_var.get() != "Tmrt_calc":
@@ -432,14 +449,28 @@ class App:
         widget.delete(0, "end")
         widget.insert(0, f"{info['svf']:.4f}")
         widget.configure(text_color=HIGHLIGHT_COLOR)
+
+        shading_text = ""
+        hour_ann, hour_widget = self.param_entries.get("hour_of_day", (None, None))
+        shade_ann, shade_widget = self.param_entries.get("Is_Shaded", (None, None))
+        if isinstance(hour_widget, ctk.CTkEntry) and isinstance(shade_widget, ctk.BooleanVar):
+            try:
+                is_shaded, time_str = fisheye_shading_at_hour(
+                    info["timeseries"], hour_widget.get().strip()
+                )
+                shade_widget.set(is_shaded)
+                shading_text = f"; Is_Shaded = {is_shaded} at {time_str}"
+            except (KeyError, StopIteration, TypeError, ValueError):
+                shading_text = "; Is_Shaded not filled (invalid hour or missing timeseries data)"
+
         if self.omega_hint_label is not None:
             self.omega_hint_label.configure(
-                text=f"✓ SVF = {info['svf']:.4f} obtained from photo (source: {info['path']})",
+                text=f"✓ SVF = {info['svf']:.4f}{shading_text} obtained from photo (source: {info['path']})",
                 text_color=HIGHLIGHT_COLOR,
             )
         if self.omega_clear_btn is not None:
             self.omega_clear_btn.configure(state="normal")
-        self.set_status(f"Filled OmegaF = {info['svf']:.4f} from fisheye photo analysis")
+        self.set_status(f"Filled OmegaF = {info['svf']:.4f}{shading_text} from fisheye photo analysis")
 
     def _clear_fisheye_svf(self):
         self._fisheye_svf_info = None
@@ -447,11 +478,14 @@ class App:
         if isinstance(widget, ctk.CTkEntry):
             widget.delete(0, "end")
             widget.configure(text_color=self._omega_default_text_color)
+        shade_ann, shade_widget = self.param_entries.get("Is_Shaded", (None, None))
+        if isinstance(shade_widget, ctk.BooleanVar):
+            shade_widget.set(False)
         if self.omega_hint_label is not None:
             self.omega_hint_label.configure(text="")
         if self.omega_clear_btn is not None:
             self.omega_clear_btn.configure(state="disabled")
-        self.set_status("Cleared image-derived OmegaF")
+        self.set_status("Cleared image-derived OmegaF and Is_Shaded")
 
     def _update_fisheye_section_visibility(self, fn_name: str):
         if fn_name == "Tmrt_calc":
@@ -542,7 +576,7 @@ class App:
                     row=hint_row, column=0, columnspan=max_cols, sticky="w", padx=6, pady=(0, 2)
                 )
                 self.omega_clear_btn = ctk.CTkButton(
-                    section, text="Clear Photo SVF", width=140, command=self._clear_fisheye_svf, state="disabled"
+                    section, text="Clear Photo Values", width=140, command=self._clear_fisheye_svf, state="disabled"
                 )
                 self.omega_clear_btn.grid(row=hint_row + 1, column=0, sticky="w", padx=6, pady=(0, 8))
                 self.param_widgets.append(self.omega_hint_label)
@@ -803,6 +837,8 @@ class App:
         if fn is None:
             messagebox.showerror("Error", f"Function {fn_name} not found")
             return
+        if fn_name == "Tmrt_calc" and self._fisheye_svf_info is not None:
+            self._apply_fisheye_svf_to_form()
         sig = inspect.signature(fn)
         kwargs = {}
         for name, p in sig.parameters.items():

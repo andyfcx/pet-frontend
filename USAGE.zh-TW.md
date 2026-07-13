@@ -37,9 +37,9 @@ biometeo-front
 
 5. **引用建議**——執行完成後，表格下方會顯示該函式建議引用的文獻（若適用，還會附上風速折減指數的說明）。
 
-## 魚眼照片 → 天空可視因子（Sky View Factor，僅限 Tmrt_calc）
+## 魚眼照片 → 天空可視因子與遮蔭（僅限 Tmrt_calc）
 
-選擇 `Tmrt_calc` 時，表單上方會出現可展開/收合的「Fisheye Photo → Sky View Factor」區塊，讓你用一張魚眼照片自動算出天空可視因子（`OmegaF`），不用手動輸入。
+選擇 `Tmrt_calc` 時，表單上方會出現可展開/收合的「Fisheye Photo → Sky View Factor」區塊，用魚眼照片自動算出天空可視因子（`OmegaF`），並提供指定時間的遮蔭狀態（`Is_Shaded`）。
 
 1. 點擊區塊標題展開它。
 2. **Select Fisheye Photo** 選擇照片，或直接把照片拖曳到畫布上。
@@ -48,12 +48,12 @@ biometeo-front
 5. 點擊 **Run Analysis**。完成後：
    - **SVF** 數值會以醒目顏色顯示，同時顯示天空遮罩（sky mask）、太陽路徑疊圖（sun-path overlay），以及日照/遮蔭/可視時間統計。
    - 下方會畫出「Daily Shading Timeline」遮蔭時間軸圖表，把滑鼠移到遮蔭區段上可以看到起訖時間與持續時長。
-   - 計算出的 SVF 會**自動填入下方 Tmrt_calc 表單的 `OmegaF` 欄位**，同樣以醒目顏色顯示，並附上提示文字說明是由哪張照片算出來的。
+   - 計算出的 SVF 會**自動填入 `OmegaF`**；系統也會依表單的 `hour_of_day` 找到對應分鐘，並填入 `Is_Shaded`。若分析後修改時間，按下 **Run** 時會再同步一次。
 6. 想更換照片時，點擊魚眼區塊的 **Clear** 按鈕——會清空畫布與分析結果，讓你可以放入新的照片。
-7. 想移除自動填入的 SVF（例如想改成手動輸入 `OmegaF`），點擊 `OmegaF` 欄位旁的 **Clear Photo SVF** 按鈕。
+7. 想移除照片產生的數值，點擊 `OmegaF` 欄位旁的 **Clear Photo Values**；這會清空 `OmegaF` 並將 `Is_Shaded` 重設為 false。
 8. **Export Shading Intervals CSV** / **Export Timeline Image** 可以把遮蔭分析結果匯出成檔案。
 
 ## 小提醒
 
-- 切換到其他函式再切回 `Tmrt_calc`，先前算好的 SVF 會保留，並自動重新套用到 `OmegaF` 欄位。
+- 切換到其他函式再切回 `Tmrt_calc`，先前的魚眼分析結果會保留，並重新套用 `OmegaF` 與符合當前時間的 `Is_Shaded`。
 - 拖曳檔案（照片或 CSV）需要應用程式支援拖放功能；如果你使用的版本沒有這項支援，改用 **Select** / **Open CSV** 按鈕即可。

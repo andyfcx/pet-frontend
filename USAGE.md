@@ -37,9 +37,9 @@ Download the macOS `.dmg` or Windows installer from the project's [GitHub Releas
 
 5. **Citation** — after a run, the panel below the table shows suggested citations for the function you used (and, where relevant, a note about the wind-speed reduction exponent).
 
-## Fisheye Photo → Sky View Factor (Tmrt_calc only)
+## Fisheye Photo → Sky View Factor and Shading (Tmrt_calc only)
 
-When `Tmrt_calc` is selected, a collapsible **Fisheye Photo → Sky View Factor** section appears above the form. This lets you compute the Sky View Factor (`OmegaF`) from a fisheye photo instead of entering it manually.
+When `Tmrt_calc` is selected, a collapsible **Fisheye Photo → Sky View Factor** section appears above the form. It computes the Sky View Factor (`OmegaF`) and the minute-specific obstacle shading flag (`Is_Shaded`) from a fisheye photo.
 
 1. Click the section header to expand it.
 2. **Select Fisheye Photo**, or drag a photo directly onto the canvas.
@@ -48,12 +48,12 @@ When `Tmrt_calc` is selected, a collapsible **Fisheye Photo → Sky View Factor*
 5. Click **Run Analysis**. When it finishes:
    - The **SVF** value is shown in a highlighted color, along with the sky mask, sun-path overlay, and a summary of sunlit/shaded/visible minutes.
    - A **Daily Shading Timeline** chart is drawn; hover over a shaded interval to see its start/end time and duration.
-   - The computed SVF is **automatically filled into the `OmegaF` field** of the Tmrt_calc form below, highlighted in the same color, with a note showing which photo it came from.
+   - The computed SVF is **automatically filled into `OmegaF`**. The shading result matching the form's `hour_of_day` is filled into `Is_Shaded`; it is refreshed again when you click **Run** in case the hour has changed.
 6. To load a different photo, click **Clear** on the fisheye section — this empties the canvas and analysis results so you can drop in a new image.
-7. To remove the auto-filled SVF from the form (e.g. to enter `OmegaF` manually instead), click **Clear Photo SVF** next to the `OmegaF` field.
+7. To remove the photo-derived values, click **Clear Photo Values** next to the `OmegaF` field. This clears `OmegaF` and resets `Is_Shaded` to false.
 8. **Export Shading Intervals CSV** / **Export Timeline Image** save the shading analysis to a file.
 
 ## Tips
 
-- Switching away from `Tmrt_calc` and back preserves the last computed SVF — it's reapplied automatically to the `OmegaF` field.
+- Switching away from `Tmrt_calc` and back preserves the last fisheye result and reapplies both `OmegaF` and the time-matched `Is_Shaded` value.
 - Dragging files (photos or CSVs) requires the app to support drag-and-drop; if it's unavailable in your build, use the **Select** / **Open CSV** buttons instead.

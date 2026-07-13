@@ -36,7 +36,13 @@ class FisheyeView(ctk.CTkFrame):
     cx/cy/r overrides, so dragging the circle does not affect the computed SVF.
     """
 
-    def __init__(self, master, bm_module, on_svf: Optional[Callable[[float, str], None]] = None, **kwargs):
+    def __init__(
+        self,
+        master,
+        bm_module,
+        on_svf: Optional[Callable[[float, str, List[Dict[str, Any]]], None]] = None,
+        **kwargs,
+    ):
         super().__init__(master, **kwargs)
         self.bm = bm_module
         self._on_svf = on_svf
@@ -502,9 +508,9 @@ class FisheyeView(ctk.CTkFrame):
         self._last_result = result
         self._render_results(result)
         if self._on_svf is not None:
-            self._on_svf(result["svf"], self.image_path)
+            self._on_svf(result["svf"], self.image_path, result["timeseries"])
             self.status_label.configure(
-                text=f"Done — SVF = {result['svf']:.4f} filled into Tmrt_calc's OmegaF field"
+                text=f"Done — SVF = {result['svf']:.4f} filled into Tmrt_calc's OmegaF and Is_Shaded fields"
             )
         else:
             self.status_label.configure(text="Done")
