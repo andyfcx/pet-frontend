@@ -351,6 +351,19 @@ class App:
         self.format_var = ctk.StringVar(value="csv")
         self.format_menu = ctk.CTkOptionMenu(self.output_controls, values=["csv", "json"], variable=self.format_var)
         self.format_menu.pack(side="left", padx=(0, 12))
+        ctk.CTkLabel(self.output_controls, text="Decimals:").pack(side="left", padx=(4, 4))
+        self.decimals_slider = ctk.CTkSlider(
+            self.output_controls,
+            from_=0,
+            to=8,
+            number_of_steps=8,
+            width=120,
+            command=self.on_decimals_changed,
+        )
+        self.decimals_slider.set(2)
+        self.decimals_slider.pack(side="left", padx=(0, 4))
+        self.decimals_label = ctk.CTkLabel(self.output_controls, text="2", width=16)
+        self.decimals_label.pack(side="left", padx=(0, 12))
         self.save_btn = ctk.CTkButton(self.output_controls, text="Save Output", command=self.on_save_output)
         self.save_btn.pack(side="left", padx=(0, 8))
         self.copy_btn = ctk.CTkButton(self.output_controls, text="Copy to Clipboard", command=self.on_copy_output)
@@ -916,14 +929,20 @@ class App:
         else:
             # Scalars
             df = pd.DataFrame({"result": results})
-        return self.round_numeric(df)
-
-    def round_numeric(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Round float-valued columns to 2 decimal places for display/output."""
-        for col in df.columns:
-            if pd.api.types.is_float_dtype(df[col]):
-                df[col] = df[col].round(2)
         return df
+
+    def get_decimals(self) -> int:
+        """Return the currently selected number of decimal places for output."""
+        try:
+            return max(0, round(self.decimals_slider.get()))
+        except (ValueError, AttributeError):
+            return 2
+
+    def on_decimals_changed(self, _value: float = None):
+        decimals = self.get_decimals()
+        self.decimals_label.configure(text=str(decimals))
+        if self.current_output_df is not None:
+            self.render_table(self.current_output_df)
 
     # ------- Table rendering and utilities -------
     def render_table(self, df: pd.DataFrame):
@@ -943,10 +962,9 @@ class App:
             values = [self._format_cell(row[c]) for c in cols]
             self.table.insert("", "end", values=values)
 
-    @staticmethod
-    def _format_cell(value: Any) -> Any:
+    def _format_cell(self, value: Any) -> Any:
         if isinstance(value, float):
-            return f"{value:.2f}"
+            return f"{value:.{self.get_decimals()}f}"
         return value
 
     def on_table_click_copy(self, event):
@@ -991,13 +1009,14 @@ class App:
         path = filedialog.asksaveasfilename(title="Save output", defaultextension=defext, filetypes=ftypes)
         if not path:
             return
+        decimals = self.get_decimals()
         try:
             if fmt == "json":
-                text = self.current_output_df.to_json(orient="records", double_precision=2)
+                text = self.current_output_df.to_json(orient="records", double_precision=decimals)
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(text)
             else:
-                self.current_output_df.to_csv(path, index=False, float_format="%.2f")
+                self.current_output_df.to_csv(path, index=False, float_format=f"%.{decimals}f")
             self.set_status(f"Saved to {path}")
         except Exception as e:
             messagebox.showerror("Save error", str(e))
@@ -1013,11 +1032,12 @@ class App:
             pass
         if fmt not in ("csv", "json"):
             fmt = "csv"
+        decimals = self.get_decimals()
         try:
             if fmt == "json":
-                text = self.current_output_df.to_json(orient="records", double_precision=2)
+                text = self.current_output_df.to_json(orient="records", double_precision=decimals)
             else:
-                text = self.current_output_df.to_csv(index=False, float_format="%.2f")
+                text = self.current_output_df.to_csv(index=False, float_format=f"%.{decimals}f")
             self.root.clipboard_clear()
             self.root.clipboard_append(text)
             self.set_status(f"Copied {fmt.upper()} to clipboard")
