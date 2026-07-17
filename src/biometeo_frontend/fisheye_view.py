@@ -9,12 +9,14 @@ from typing import Any, Callable, Dict, List, Optional
 
 import customtkinter as ctk
 from tkinter import Canvas, filedialog, messagebox
-from PIL import Image, ImageDraw, ImageTk
+from PIL import Image, ImageTk
 
 try:
     from tkinterdnd2 import DND_FILES
 except Exception:  # pragma: no cover - optional at runtime
     DND_FILES = None
+
+from biometeo_frontend import core_fisheye
 
 try:
     RESAMPLE = Image.Resampling.LANCZOS
@@ -307,20 +309,7 @@ class FisheyeView(ctk.CTkFrame):
         self.status_label.configure(text="Select an image to begin")
 
     def _auto_detect_circle(self):
-        # Mirrors the boundary-detection heuristic in fisheye.py's fisheye_svf()
-        # (near-white background bounding box). Only used to seed the preview
-        # circle here; the actual SVF computation still runs its own detection.
-        img = self.original_image
-        gray = img.convert("L")
-        bbox_mask = gray.point(lambda p: 0 if p > 240 else 255)
-        bbox = bbox_mask.getbbox()
-        if bbox:
-            cx = (bbox[0] + bbox[2]) // 2
-            cy = (bbox[1] + bbox[3]) // 2
-            r = int((min(bbox[2] - bbox[0], bbox[3] - bbox[1]) // 2) * 0.98)
-        else:
-            cx, cy, r = img.width // 2, img.height // 2, min(img.width, img.height) // 2
-        self.auto_circle = {"cx": float(cx), "cy": float(cy), "r": float(r)}
+        self.auto_circle = core_fisheye.auto_detect_circle(self.original_image)
 
     # ------------------------------------------------------------------
     # Circle overlay interaction
@@ -382,12 +371,11 @@ class FisheyeView(ctk.CTkFrame):
 
     def _clamp_center(self, cx, cy, r):
         w, h = self.original_image.width, self.original_image.height
-        return max(0.0, min(float(w), cx)), max(0.0, min(float(h), cy))
+        return core_fisheye.clamp_center(cx, cy, w, h)
 
     def _clamp_radius(self, cx, cy, r):
         w, h = self.original_image.width, self.original_image.height
-        max_r = max(5.0, min(cx, cy, w - cx, h - cy))
-        return max(5.0, min(r, max_r))
+        return core_fisheye.clamp_radius(cx, cy, r, w, h)
 
     def _update_circle_labels(self):
         for entry, key in ((self.cx_entry, "cx"), (self.cy_entry, "cy"), (self.r_entry, "r")):
@@ -539,20 +527,7 @@ class FisheyeView(ctk.CTkFrame):
 
     @staticmethod
     def _timeline_geometry(sunup: List[Dict[str, Any]], w: int, h: int, pad: int = TIMELINE_PAD):
-        plot_w = w - 2 * pad
-        plot_h = h - 2 * pad
-        start_dt = sunup[0]["Datetime"]
-        end_dt = sunup[-1]["Datetime"]
-        total_seconds = (end_dt - start_dt).total_seconds() or 1
-        max_alt = max(e["Solar_Altitude"] for e in sunup) or 1
-
-        def x_of(dt):
-            return pad + (dt - start_dt).total_seconds() / total_seconds * plot_w
-
-        def y_of(alt):
-            return pad + plot_h - (alt / max_alt) * plot_h
-
-        return x_of, y_of, pad, plot_w, plot_h, start_dt, total_seconds
+        return core_fisheye.timeline_geometry(sunup, w, h, pad)
 
     def _render_timeline(self, timeseries, intervals):
         self.timeline_canvas.delete("all")
@@ -594,8 +569,7 @@ class FisheyeView(ctk.CTkFrame):
 
     @staticmethod
     def _parse_interval_dt(text: str, reference_dt: datetime.datetime) -> datetime.datetime:
-        naive = datetime.datetime.strptime(text, "%Y-%m-%d %H:%M")
-        return naive.replace(tzinfo=reference_dt.tzinfo)
+        return core_fisheye.parse_interval_dt(text, reference_dt)
 
     def _show_tooltip(self, event, tag):
         iv = self._timeline_intervals.get(tag)
@@ -652,21 +626,4 @@ class FisheyeView(ctk.CTkFrame):
             messagebox.showerror("Export Failed", str(e))
 
     def _draw_timeline_image(self, timeseries, intervals, w=900, h=300) -> Image.Image:
-        sunup = [e for e in timeseries if e["Solar_Altitude"] > 0]
-        img = Image.new("RGB", (w, h), "white")
-        draw = ImageDraw.Draw(img)
-        if not sunup:
-            draw.text((10, 10), "No sunlight hours", fill="black")
-            return img
-
-        x_of, y_of, pad, plot_w, plot_h, start_dt, _ = self._timeline_geometry(sunup, w, h)
-
-        for iv in intervals:
-            x1 = x_of(self._parse_interval_dt(iv["Start_DateTime"], start_dt))
-            x2 = x_of(self._parse_interval_dt(iv["End_DateTime"], start_dt))
-            draw.rectangle([x1, pad, max(x2, x1 + 2), pad + plot_h], fill=(255, 128, 128))
-
-        points = [(x_of(e["Datetime"]), y_of(e["Solar_Altitude"])) for e in sunup]
-        draw.line(points, fill=(47, 111, 214), width=2)
-        draw.line([(pad, pad + plot_h), (pad + plot_w, pad + plot_h)], fill=(128, 128, 128))
-        return img
+        return core_fisheye.draw_timeline_image(timeseries, intervals, w, h)
