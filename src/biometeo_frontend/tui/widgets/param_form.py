@@ -5,13 +5,36 @@ logic (customtkinter) but built from Textual widgets instead.
 """
 
 import inspect
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Grid, Vertical, VerticalScroll
 from textual.widgets import Button, Checkbox, Input, Label
 
 from biometeo_frontend import core
+
+
+class GridInput(Input):
+    """Input that hands Left/Right off to the owning ParamForm's grid
+    navigation once the cursor is at the start/end of the text, instead of
+    always moving the text cursor.
+    """
+
+    def __init__(self, *args, owner_form: "ParamForm", **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.owner_form = owner_form
+
+    def action_cursor_left(self, select: bool = False) -> None:
+        if not select and self.cursor_position == 0:
+            self.owner_form.move_focus(self, 0, -1)
+        else:
+            super().action_cursor_left(select)
+
+    def action_cursor_right(self, select: bool = False) -> None:
+        if not select and self.cursor_at_end and not self._suggestion:
+            self.owner_form.move_focus(self, 0, 1)
+        else:
+            super().action_cursor_right(select)
 
 
 class ParamForm(VerticalScroll):
@@ -53,12 +76,22 @@ class ParamForm(VerticalScroll):
     }
     """
 
+    BINDINGS = [
+        Binding("up", "nav_up", "Field up", show=False),
+        Binding("down", "nav_down", "Field down", show=False),
+        Binding("left", "nav_left", "Field left", show=False),
+        Binding("right", "nav_right", "Field right", show=False),
+    ]
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.param_entries: Dict[str, Tuple[Any, Any]] = {}
         self.omega_hint: Optional[Label] = None
         self.omega_clear_btn: Optional[Button] = None
         self.current_fn_name: Optional[str] = None
+        # Rows of field widgets (Input/Checkbox), in visual grid order, used
+        # for arrow-key navigation between cells (see move_focus()).
+        self._nav_rows: List[List[Any]] = []
 
     def rebuild(self, fn_name: str) -> None:
         """Tear down and rebuild the whole form for the given function name."""
@@ -67,6 +100,7 @@ class ParamForm(VerticalScroll):
         self.param_entries = {}
         self.omega_hint = None
         self.omega_clear_btn = None
+        self._nav_rows = []
 
         fn = core.get_callable(fn_name)
         if fn is None:
@@ -81,6 +115,7 @@ class ParamForm(VerticalScroll):
                 continue
 
             cells = []
+            field_widgets = []
             for name, param in items:
                 ann = param.annotation
                 default = None if param.default is inspect._empty else param.default
@@ -93,10 +128,14 @@ class ParamForm(VerticalScroll):
                     widget = Checkbox(value=bool(default) if default is not None else False)
                     self.param_entries[name] = ("bool", widget)
                 else:
-                    widget = Input(value="" if default is None else str(default))
+                    widget = GridInput(value="" if default is None else str(default), owner_form=self)
                     self.param_entries[name] = (ann, widget)
 
+                field_widgets.append(widget)
                 cells.append(Vertical(Label(label_text, classes="param-label"), widget, classes="param-cell"))
+
+            for row_start in range(0, len(field_widgets), 2):
+                self._nav_rows.append(field_widgets[row_start:row_start + 2])
 
             section_children = [Label(core.GROUP_TITLES[group_key], classes="group-title"), Grid(*cells, classes="param-grid")]
 
@@ -109,6 +148,50 @@ class ParamForm(VerticalScroll):
 
         sections.append(Label("* Required field", classes="required-hint"))
         self.mount_all(sections)
+
+    # ------- Arrow-key grid navigation -------
+    def move_focus(self, current: Any, drow: int, dcol: int) -> None:
+        """Move focus from `current` by (drow, dcol) within the field grid."""
+        pos = None
+        for row_idx, row in enumerate(self._nav_rows):
+            for col_idx, widget in enumerate(row):
+                if widget is current:
+                    pos = (row_idx, col_idx)
+                    break
+            if pos is not None:
+                break
+        if pos is None:
+            return
+        row_idx, col_idx = pos
+
+        if dcol != 0:
+            target_row = self._nav_rows[row_idx]
+            new_col = col_idx + dcol
+            if 0 <= new_col < len(target_row):
+                target_row[new_col].focus()
+            return
+
+        new_row = row_idx + drow
+        if 0 <= new_row < len(self._nav_rows):
+            target_row = self._nav_rows[new_row]
+            target_col = min(col_idx, len(target_row) - 1)
+            target_row[target_col].focus()
+
+    def action_nav_up(self) -> None:
+        if self.screen.focused is not None:
+            self.move_focus(self.screen.focused, -1, 0)
+
+    def action_nav_down(self) -> None:
+        if self.screen.focused is not None:
+            self.move_focus(self.screen.focused, 1, 0)
+
+    def action_nav_left(self) -> None:
+        if self.screen.focused is not None:
+            self.move_focus(self.screen.focused, 0, -1)
+
+    def action_nav_right(self) -> None:
+        if self.screen.focused is not None:
+            self.move_focus(self.screen.focused, 0, 1)
 
     def read_values(self) -> Dict[str, Any]:
         """Read and parse current form values, raising ValueError on a missing
