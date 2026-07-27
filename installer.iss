@@ -17,6 +17,8 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64
+SetupIconFile=icon.ico
+UninstallDisplayIcon={app}\Biometeo Frontend.exe
 
 [Files]
 Source: "dist\Biometeo Frontend.exe"; DestDir: "{app}"; Flags: ignoreversion

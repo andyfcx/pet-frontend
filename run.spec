@@ -59,7 +59,7 @@ exe = EXE(
 app = BUNDLE(
     exe,
     name="Biometeo Frontend.app",
-    icon=None,
+    icon=str(ROOT / "icon.icns"),
     bundle_identifier="org.biometeo.frontend",
     info_plist={
         "CFBundleName": "Biometeo Frontend",
