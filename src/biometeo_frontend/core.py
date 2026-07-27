@@ -267,12 +267,15 @@ def round_numeric(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def normalize_results(results: List[Any]) -> pd.DataFrame:
+def normalize_results(results: List[Any], fn_name: str = "result") -> pd.DataFrame:
     """Convert function results to a DataFrame with reasonable columns.
-    - If result is a scalar, name column 'result'.
-    - If result is a tuple/list, create columns result_0, result_1, ...
+    - If result is a scalar, name the column after the selected function.
+    - If result is a tuple/list, create function-prefixed columns.
     - If result is a dict/Series, use keys as columns.
     - If result is a pandas object, try to convert accordingly.
+
+    Values retain their original precision. Each front end applies the user's
+    selected precision only when displaying or exporting the DataFrame.
     """
     if not results:
         return pd.DataFrame()
@@ -288,7 +291,7 @@ def normalize_results(results: List[Any]) -> pd.DataFrame:
     # Tuples/lists
     elif isinstance(first, (list, tuple)):
         max_len = max(len(r) if isinstance(r, (list, tuple)) else 1 for r in results)
-        cols = [f"result_{i}" for i in range(max_len)]
+        cols = [f"{fn_name}_{i}" for i in range(max_len)]
         norm = []
         for r in results:
             if isinstance(r, (list, tuple)):
@@ -298,6 +301,6 @@ def normalize_results(results: List[Any]) -> pd.DataFrame:
             norm.append(row)
         df = pd.DataFrame(norm, columns=cols)
     else:
-        # Scalars
-        df = pd.DataFrame({"result": results})
-    return round_numeric(df)
+        # Scalars (e.g. UTCI and SET)
+        df = pd.DataFrame({fn_name: results})
+    return df

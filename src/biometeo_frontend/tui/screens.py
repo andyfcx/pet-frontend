@@ -2,7 +2,7 @@
 
 Functionally mirrors main.py's App class (customtkinter): function selector,
 dynamic parameter form, documentation panel, CSV batch import, results table,
-output export controls, citation panel, and the fisheye SVF sub-panel with
+output export controls, on-demand citations, and the fisheye SVF sub-panel with
 its OmegaF/Is_Shaded auto-fill/highlight/clear/persist behavior.
 """
 
@@ -61,19 +61,33 @@ class MainScreen(Screen):
         content-align: right middle;
     }
     #middle {
-        height: 24;
+        height: 3fr;
+        min-height: 8;
     }
-    #docs-pane, #citation-pane {
-        width: 1fr;
+    #docs-pane {
+        width: 34;
         height: 1fr;
         border: round $primary-background-lighten-2;
         padding: 0 1;
     }
-    #docs-pane TextArea, #citation-pane TextArea {
+    #docs-header {
+        height: auto;
+    }
+    #docs-title {
+        width: 1fr;
+        text-style: bold;
+    }
+    #docs-back-btn {
+        width: auto;
+        min-width: 12;
+    }
+    #docs-pane TextArea {
         height: 1fr;
     }
     #results-table {
-        height: 12;
+        height: 2fr;
+        min-height: 5;
+        max-height: 12;
         margin: 1 0;
     }
     #output-controls {
@@ -86,9 +100,8 @@ class MainScreen(Screen):
     }
     #output-controls Button {
         margin-right: 1;
-    }
-    #citation-pane {
-        height: 10;
+        min-width: 0;
+        width: auto;
     }
     """
 
@@ -97,6 +110,7 @@ class MainScreen(Screen):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.current_output_df: Optional[pd.DataFrame] = None
+        self.current_output_fn: Optional[str] = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -117,27 +131,41 @@ class MainScreen(Screen):
         with Horizontal(id="middle"):
             yield ParamForm(id="param-form")
             with Vertical(id="docs-pane"):
-                yield Label("Documentation")
+                with Horizontal(id="docs-header"):
+                    yield Label("Documentation", id="docs-title")
+                    yield Button("← Back", id="docs-back-btn")
                 yield TextArea(read_only=True, id="docs-text")
 
         yield DataTable(id="results-table", cursor_type="cell")
         yield ProgressBar(id="csv-progress", total=100)
 
         with Horizontal(id="output-controls"):
+            yield Label("Output:")
             yield Label("Format:")
-            yield Select([("csv", "csv"), ("json", "json")], value="csv", allow_blank=False, id="format-select")
+            yield Select(
+                [("csv", "csv"), ("json", "json")],
+                value="csv",
+                allow_blank=False,
+                compact=True,
+                id="format-select",
+            )
+            yield Label("Decimals:")
+            yield Select(
+                [(str(value), value) for value in range(9)],
+                value=2,
+                allow_blank=False,
+                compact=True,
+                id="decimals-select",
+            )
             yield Button("Save Output", id="save-output-btn")
             yield Button("Copy to Clipboard", id="copy-output-btn")
             yield Button("Clear", id="clear-output-btn")
-
-        with Vertical(id="citation-pane"):
-            yield Label("Citation suggestions")
-            yield TextArea(read_only=True, id="citation-text")
 
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#csv-progress", ProgressBar).display = False
+        self.query_one("#docs-back-btn", Button).display = False
         self._on_function_change(core.TARGET_FUNCTIONS[0])
 
     # ------- Status helper -------
@@ -148,6 +176,8 @@ class MainScreen(Screen):
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "fn-select":
             self._on_function_change(str(event.value))
+        elif event.select.id == "decimals-select" and self.current_output_df is not None:
+            self._render_table(self.current_output_df)
 
     def _on_function_change(self, fn_name: str) -> None:
         collapsible = self.query_one("#fisheye-collapsible", Collapsible)
@@ -157,17 +187,41 @@ class MainScreen(Screen):
         form = self.query_one(ParamForm)
         form.rebuild(fn_name)
 
-        docs_text = self.query_one("#docs-text", TextArea)
         if fn is None:
-            docs_text.text = "No documentation available."
+            self._set_docs_panel("Function not found.")
             self.set_status(f"Function {fn_name} not found")
             return
-        docs_text.text = inspect.getdoc(fn) or "No documentation available."
-
-        self.query_one("#citation-text", TextArea).text = ""
+        self._show_function_docs()
 
         if fn_name == "Tmrt_calc" and self.fisheye_svf_info is not None:
             self._apply_fisheye_svf_to_form()
+
+    # ------- Documentation / citation panel -------
+    def _set_docs_panel(self, text: str, title: str = "Documentation", show_back: bool = False) -> None:
+        self.query_one("#docs-text", TextArea).text = text
+        self.query_one("#docs-title", Label).update(title)
+        self.query_one("#docs-back-btn", Button).display = show_back
+
+    def _show_function_docs(self) -> None:
+        fn_name = str(self.query_one("#fn-select", Select).value)
+        fn = get_callable(fn_name)
+        doc = (inspect.getdoc(fn) or "No documentation available.") if fn else "Function not found."
+        self._set_docs_panel(doc)
+
+    def _show_citation(self, fn_name: str) -> None:
+        self._set_docs_panel(
+            core.build_citation_text(fn_name),
+            title="Citation Suggestions",
+            show_back=True,
+        )
+
+    def _notify_citation(self) -> None:
+        fn_name = self.current_output_fn or str(self.query_one("#fn-select", Select).value)
+        self._show_citation(fn_name)
+        self.app.notify(
+            f"Citation suggestions for {fn_name} are now shown in the Documentation panel.",
+            title="Citation Suggestion",
+        )
 
     # ------- Fisheye SVF sync -------
     def on_fisheye_panel_analysis_complete(self, message: FisheyePanel.AnalysisComplete) -> None:
@@ -243,6 +297,8 @@ class MainScreen(Screen):
             self._on_clear_output()
         elif button_id == "clear-photo-values-btn":
             self._clear_fisheye_svf()
+        elif button_id == "docs-back-btn":
+            self._show_function_docs()
 
     # ------- CSV import -------
     def _open_csv_picker(self) -> None:
@@ -323,17 +379,25 @@ class MainScreen(Screen):
         else:
             self.set_status("Completed")
 
-        out_df = core.normalize_results(results)
+        out_df = core.normalize_results(results, fn_name)
         joined = pd.concat([df.reset_index(drop=True), out_df], axis=1)
         self.current_output_df = joined
+        self.current_output_fn = fn_name
         self._render_table(joined)
-        self.query_one("#citation-text", TextArea).text = core.build_citation_text(fn_name)
 
         self.query_one("#csv-progress", ProgressBar).display = False
         self._set_controls_enabled(True)
 
     def _set_controls_enabled(self, enabled: bool) -> None:
-        for wid in ("#open-csv-btn", "#run-btn", "#format-select", "#save-output-btn", "#copy-output-btn", "#clear-output-btn"):
+        for wid in (
+            "#open-csv-btn",
+            "#run-btn",
+            "#format-select",
+            "#decimals-select",
+            "#save-output-btn",
+            "#copy-output-btn",
+            "#clear-output-btn",
+        ):
             self.query_one(wid).disabled = not enabled
 
     # ------- Manual run -------
@@ -355,10 +419,10 @@ class MainScreen(Screen):
 
         try:
             result = fn(**kwargs)
-            out_df = core.normalize_results([result])
+            out_df = core.normalize_results([result], fn_name)
             self.current_output_df = out_df
+            self.current_output_fn = fn_name
             self._render_table(out_df)
-            self.query_one("#citation-text", TextArea).text = core.build_citation_text(fn_name)
             self.set_status("Completed")
         except Exception:
             buf = io.StringIO()
@@ -376,18 +440,24 @@ class MainScreen(Screen):
             values = [self._format_cell(row[c]) for c in cols]
             table.add_row(*values)
 
-    @staticmethod
-    def _format_cell(value: Any) -> Any:
+    def _format_cell(self, value: Any) -> Any:
         if isinstance(value, float):
-            return f"{value:.2f}"
+            return f"{value:.{self._get_decimals()}f}"
         return value
 
-    def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
+    def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
         value = event.value
         self.app.copy_to_clipboard("" if value is None else str(value))
         self.set_status("Copied cell to clipboard")
 
     # ------- Output controls -------
+    def _get_decimals(self) -> int:
+        value = self.query_one("#decimals-select", Select).value
+        try:
+            return max(0, min(8, int(value)))
+        except (TypeError, ValueError):
+            return 2
+
     def _open_save_picker(self) -> None:
         if self.current_output_df is None or self.current_output_df.empty:
             self.app.notify("No output to save yet.", severity="warning")
@@ -400,13 +470,15 @@ class MainScreen(Screen):
         if path is None or self.current_output_df is None:
             return
         fmt = self.query_one("#format-select", Select).value or "csv"
+        decimals = self._get_decimals()
         try:
             if fmt == "json":
-                text = self.current_output_df.to_json(orient="records", double_precision=2)
+                text = self.current_output_df.to_json(orient="records", double_precision=decimals)
                 Path(path).write_text(text, encoding="utf-8")
             else:
-                self.current_output_df.to_csv(path, index=False, float_format="%.2f")
+                self.current_output_df.to_csv(path, index=False, float_format=f"%.{decimals}f")
             self.set_status(f"Saved to {path}")
+            self._notify_citation()
         except Exception as e:
             self.app.notify(f"Save error: {e}", severity="error")
 
@@ -415,13 +487,15 @@ class MainScreen(Screen):
             self.app.notify("No output to copy yet.", severity="warning")
             return
         fmt = self.query_one("#format-select", Select).value or "csv"
+        decimals = self._get_decimals()
         try:
             if fmt == "json":
-                text = self.current_output_df.to_json(orient="records", double_precision=2)
+                text = self.current_output_df.to_json(orient="records", double_precision=decimals)
             else:
-                text = self.current_output_df.to_csv(index=False, float_format="%.2f")
+                text = self.current_output_df.to_csv(index=False, float_format=f"%.{decimals}f")
             self.app.copy_to_clipboard(text)
             self.set_status(f"Copied {fmt.upper()} to clipboard")
+            self._notify_citation()
         except Exception as e:
             self.app.notify(f"Copy error: {e}", severity="error")
 
@@ -429,5 +503,6 @@ class MainScreen(Screen):
         table = self.query_one("#results-table", DataTable)
         table.clear(columns=True)
         self.current_output_df = None
-        self.query_one("#citation-text", TextArea).text = ""
+        self.current_output_fn = None
+        self._show_function_docs()
         self.set_status("Cleared output")

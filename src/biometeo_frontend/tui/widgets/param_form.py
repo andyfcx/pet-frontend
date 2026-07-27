@@ -7,6 +7,7 @@ logic (customtkinter) but built from Textual widgets instead.
 import inspect
 from typing import Any, Dict, List, Optional, Tuple
 
+from textual import events
 from textual.binding import Binding
 from textual.containers import Grid, Vertical, VerticalScroll
 from textual.widgets import Button, Checkbox, Input, Label
@@ -38,7 +39,10 @@ class GridInput(Input):
 
 
 class ParamForm(VerticalScroll):
-    """Scrollable, dynamically-rebuilt parameter form for the selected function."""
+    """Responsive, dynamically-rebuilt form for the selected function."""
+
+    MAX_COLUMNS = 8
+    MIN_COLUMN_WIDTH = 14
 
     DEFAULT_CSS = """
     ParamForm {
@@ -52,8 +56,8 @@ class ParamForm(VerticalScroll):
         margin-top: 1;
     }
     ParamForm .param-grid {
-        grid-size: 2;
-        grid-gutter: 0 2;
+        grid-size: 8;
+        grid-gutter: 0 1;
         height: auto;
         margin-bottom: 1;
     }
@@ -92,6 +96,8 @@ class ParamForm(VerticalScroll):
         # Rows of field widgets (Input/Checkbox), in visual grid order, used
         # for arrow-key navigation between cells (see move_focus()).
         self._nav_rows: List[List[Any]] = []
+        self._nav_groups: List[List[Any]] = []
+        self._column_count = self.MAX_COLUMNS
 
     def rebuild(self, fn_name: str) -> None:
         """Tear down and rebuild the whole form for the given function name."""
@@ -101,6 +107,7 @@ class ParamForm(VerticalScroll):
         self.omega_hint = None
         self.omega_clear_btn = None
         self._nav_rows = []
+        self._nav_groups = []
 
         fn = core.get_callable(fn_name)
         if fn is None:
@@ -134,8 +141,7 @@ class ParamForm(VerticalScroll):
                 field_widgets.append(widget)
                 cells.append(Vertical(Label(label_text, classes="param-label"), widget, classes="param-cell"))
 
-            for row_start in range(0, len(field_widgets), 2):
-                self._nav_rows.append(field_widgets[row_start:row_start + 2])
+            self._nav_groups.append(field_widgets)
 
             section_children = [Label(core.GROUP_TITLES[group_key], classes="group-title"), Grid(*cells, classes="param-grid")]
 
@@ -148,6 +154,23 @@ class ParamForm(VerticalScroll):
 
         sections.append(Label("* Required field", classes="required-hint"))
         self.mount_all(sections)
+        self.call_after_refresh(self._update_column_count, self.size.width)
+
+    def on_resize(self, event: events.Resize) -> None:
+        """Use up to eight columns, shrinking only on narrower terminals."""
+        self._update_column_count(event.size.width)
+
+    def _update_column_count(self, width: int) -> None:
+        columns = max(1, min(self.MAX_COLUMNS, width // self.MIN_COLUMN_WIDTH))
+        if columns == self._column_count and self._nav_rows:
+            return
+        self._column_count = columns
+        for grid in self.query(Grid):
+            grid.styles.grid_size_columns = columns
+        self._nav_rows = []
+        for widgets in self._nav_groups:
+            for row_start in range(0, len(widgets), columns):
+                self._nav_rows.append(widgets[row_start:row_start + columns])
 
     # ------- Arrow-key grid navigation -------
     def move_focus(self, current: Any, drow: int, dcol: int) -> None:
