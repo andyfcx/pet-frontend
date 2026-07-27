@@ -30,6 +30,10 @@ else:
 
 APP_TITLE = "Biometeo UI"
 HIGHLIGHT_COLOR = ("#0f9d58", "#4ade80")
+# Documentation panel is intentionally narrow so the input form gets the
+# width it needs to lay out without vertical scrolling; long docs remain
+# fully readable via the textbox's own scrollbar.
+DOCS_WIDTH = 300
 TARGET_FUNCTIONS = [
     "mPET",
     "mPET_quick",
@@ -255,8 +259,19 @@ class App:
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
 
+        # A resizable vertical split so the input form (top pane) can claim most of
+        # the window height by default instead of splitting evenly with the output
+        # table (bottom pane) — the input fields matter before any output exists.
+        # The user can still drag the sash to give the table more room.
+        self.main_paned = ttk.PanedWindow(root, orient="vertical")
+        self.main_paned.pack(fill="both", expand=True)
+        self.top_pane = ctk.CTkFrame(self.main_paned, fg_color="transparent")
+        self.bottom_pane = ctk.CTkFrame(self.main_paned, fg_color="transparent")
+        self.main_paned.add(self.top_pane, weight=3)
+        self.main_paned.add(self.bottom_pane, weight=2)
+
         # Top: function selection
-        top = ctk.CTkFrame(root)
+        top = ctk.CTkFrame(self.top_pane)
         top.pack(side="top", fill="x", padx=8, pady=8)
 
         ctk.CTkLabel(top, text="Select function:").pack(side="left")
@@ -277,7 +292,7 @@ class App:
         self.status_lbl.pack(side="right")
 
         # Drag-and-drop area for CSV files
-        self.drop_frame = ctk.CTkFrame(root, border_width=1, border_color="gray50")
+        self.drop_frame = ctk.CTkFrame(self.top_pane, border_width=1, border_color="gray50")
         self.drop_frame.pack(side="top", fill="x", padx=8, pady=(0, 8))
         self.drop_label = ctk.CTkLabel(self.drop_frame, text="Drag a CSV file here, or click to browse", height=40)
         self.drop_label.pack(fill="x", padx=8, pady=8)
@@ -300,23 +315,39 @@ class App:
                 pass
 
         # Middle: left form, right docs
-        self.middle = ctk.CTkFrame(root)
+        self.middle = ctk.CTkFrame(self.top_pane)
         middle = self.middle
         self.middle.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
 
-        self.form_frame = ctk.CTkScrollableFrame(middle, width=560)
-        self.form_frame.pack(side="left", fill="both", expand=False, padx=(0, 8))
+        # Form gets most of the width so its input fields can lay out across more
+        # columns and fit without vertical scrolling; docs shrinks to a narrower
+        # column on the right (it stays fully readable via its own scrollbar).
+        self.form_frame = ctk.CTkScrollableFrame(middle, width=900)
+        self.form_frame.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
-        self.docs_frame = ctk.CTkFrame(middle)
-        self.docs_frame.pack(side="left", fill="both", expand=True)
-        ctk.CTkLabel(self.docs_frame, text="Documentation").pack(anchor="w", padx=8, pady=4)
-        self.docs_text = ctk.CTkTextbox(self.docs_frame)
+        self.docs_frame = ctk.CTkFrame(middle, width=DOCS_WIDTH)
+        self.docs_frame.pack(side="left", fill="y", expand=False)
+        self.docs_frame.pack_propagate(False)
+        # Header: title switches between "Documentation" and "Citation
+        # Suggestions"; the back button only appears while citations are shown
+        # (after Save Output / Copy to Clipboard) so the user can return to docs.
+        # Stacked (not side-by-side) since the panel itself is narrow.
+        docs_header = ctk.CTkFrame(self.docs_frame, fg_color="transparent")
+        docs_header.pack(fill="x")
+        self.docs_title_label = ctk.CTkLabel(docs_header, text="Documentation")
+        self.docs_title_label.pack(anchor="w", padx=8, pady=(4, 0))
+        self.docs_back_btn = ctk.CTkButton(
+            docs_header, text="← Back to Documentation",
+            command=self._show_function_docs,
+        )
+        # not packed yet — only shown while in citation mode
+        self.docs_text = ctk.CTkTextbox(self.docs_frame, wrap="word")
         self.docs_text.pack(fill="both", expand=True, padx=8, pady=8)
         self.docs_text.configure(state="disabled")
 
         # Fisheye photo -> Sky View Factor helper, shown only for Tmrt_calc.
         # Collapsed by default; expanding lazily builds the (heavy) FisheyeView widget.
-        self.fisheye_section = ctk.CTkFrame(root, border_width=1, border_color="gray50")
+        self.fisheye_section = ctk.CTkFrame(self.top_pane, border_width=1, border_color="gray50")
         self._fisheye_expanded = False
         fisheye_header = ctk.CTkFrame(self.fisheye_section, fg_color="transparent")
         fisheye_header.pack(fill="x")
@@ -331,7 +362,7 @@ class App:
         self.fisheye_body = ctk.CTkFrame(self.fisheye_section, fg_color="transparent")
 
         # Bottom: output table
-        self.bottom_frame = ctk.CTkFrame(root)
+        self.bottom_frame = ctk.CTkFrame(self.bottom_pane)
         bottom = self.bottom_frame
         self.bottom_frame.pack(side="bottom", fill="both", expand=True, padx=8, pady=(0, 8))
 
@@ -344,7 +375,7 @@ class App:
         self.table.configure(yscrollcommand=yscroll.set)
 
         # Output controls (format selector, Save, Copy) placed near the table
-        self.output_controls = ctk.CTkFrame(root)
+        self.output_controls = ctk.CTkFrame(self.bottom_pane)
         self.output_controls.pack(side="bottom", fill="x", expand=False, padx=8, pady=(0, 8))
         ctk.CTkLabel(self.output_controls, text="Output:").pack(side="left", padx=(8, 4))
         ctk.CTkLabel(self.output_controls, text="Format:").pack(side="left", padx=(4, 4))
@@ -372,7 +403,7 @@ class App:
         self.clear_btn.pack(side="left", padx=(0, 8))
 
         # Progress area (shown during CSV processing)
-        self.progress_frame = ctk.CTkFrame(root)
+        self.progress_frame = ctk.CTkFrame(self.bottom_pane)
         self.progress_label = ctk.CTkLabel(self.progress_frame, text="Processing CSV…")
         self.progress_label.pack(anchor="w", padx=8, pady=(4, 0))
         self.progress_bar = ctk.CTkProgressBar(self.progress_frame)
@@ -386,18 +417,15 @@ class App:
         except Exception:
             pass
 
-        # Citation area below the table
-        self.citation_frame = ctk.CTkFrame(root)
-        self.citation_frame.pack(side="bottom", fill="both", expand=False, padx=8, pady=(0, 8))
-        ctk.CTkLabel(self.citation_frame, text="Citation suggestions").pack(anchor="w", padx=8, pady=(4, 0))
-        self.citation_text = ctk.CTkTextbox(self.citation_frame, height=140)
-        self.citation_text.pack(fill="both", expand=True, padx=8, pady=8)
-        self.citation_text.configure(state="disabled")
+        # Citation suggestions are no longer a fixed panel (it left little room for
+        # the output table); they're shown in the Documentation panel on demand,
+        # triggered from Save Output / Copy to Clipboard — see _show_citation().
 
         # Storage for dynamic widgets and data
         self.param_entries: Dict[str, Any] = {}
         self.param_widgets: List[Any] = []
         self.current_output_df: Optional[pd.DataFrame] = None
+        self.current_output_fn: Optional[str] = None
         self.fisheye_view = None
 
         # SVF and per-minute shading carried over from the fisheye photo analysis
@@ -417,7 +445,6 @@ class App:
 
         # Initialize with default function
         self.on_function_change(self.fn_var.get())
-        self.clear_citation()
 
         if bm_import_error is not None:
             messagebox.showerror("Import error", f"Failed to import biometeo: {bm_import_error}")
@@ -515,15 +542,9 @@ class App:
             self.set_status(f"Function {fn_name} not found")
             return
 
-        # Docs
-        doc = inspect.getdoc(fn) or "No documentation available."
-        self.docs_text.configure(state="normal")
-        self.docs_text.delete("1.0", "end")
-        self.docs_text.insert("1.0", doc)
-        self.docs_text.configure(state="disabled")
-
-        # Clear citation when switching functions
-        self.clear_citation()
+        # Docs — switching functions always resets the panel back to
+        # documentation, even if it was showing a citation suggestion.
+        self._show_function_docs()
 
         # Build form, grouped into labeled sections (date/time+location,
         # physiological info, meteorological data, other).
@@ -533,21 +554,26 @@ class App:
         for name, param in params:
             grouped[PARAM_GROUP_MAP.get(name, "other")].append((name, param))
 
-        max_cols = 4
+        # More columns than before (and wrapped labels of a bounded width) so even
+        # the largest form (Tmrt_calc, ~21 params) lays out within the visible
+        # height instead of requiring the user to scroll down to see every field.
+        max_cols = 8
+        label_font = ctk.CTkFont(size=11)
+        col_width = 122
         for group_key in GROUP_ORDER:
             items = grouped[group_key]
             if not items:
                 continue
 
             section = ctk.CTkFrame(self.form_frame)
-            section.pack(fill="x", padx=4, pady=(8, 4))
+            section.pack(fill="x", padx=4, pady=(5, 3))
             self.param_widgets.append(section)
 
             title = ctk.CTkLabel(
                 section, text=GROUP_TITLES[group_key],
                 font=ctk.CTkFont(weight="bold"),
             )
-            title.grid(row=0, column=0, columnspan=max_cols, sticky="w", padx=6, pady=(6, 4))
+            title.grid(row=0, column=0, columnspan=max_cols, sticky="w", padx=6, pady=(4, 3))
 
             for idx, (name, param) in enumerate(items):
                 row = 1 + (idx // max_cols) * 2
@@ -562,25 +588,28 @@ class App:
                     label_text += " *"
                 else:
                     label_text += f" ({default})"
-                lbl = ctk.CTkLabel(section, text=label_text, anchor="w")
+                lbl = ctk.CTkLabel(
+                    section, text=label_text, anchor="w", justify="left",
+                    font=label_font, wraplength=col_width - 12,
+                )
                 lbl.grid(row=row, column=col, sticky="w", padx=6, pady=(2, 0))
 
                 if ann in (bool, "bool") or isinstance(default, bool):
                     var = ctk.BooleanVar(value=bool(default) if default is not None else False)
                     cb = ctk.CTkCheckBox(section, text="", variable=var)
-                    cb.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 8))
+                    cb.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 4))
                     self.param_entries[name] = ("bool", var)
                 else:
-                    entry = ctk.CTkEntry(section, width=110)
+                    entry = ctk.CTkEntry(section, width=col_width - 18)
                     if default is not None:
                         entry.insert(0, str(default))
-                    entry.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 8))
+                    entry.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 4))
                     self.param_entries[name] = (ann, entry)
                     if name == "OmegaF":
                         self._omega_default_text_color = entry.cget("text_color")
 
             for c in range(max_cols):
-                section.grid_columnconfigure(c, weight=1)
+                section.grid_columnconfigure(c, weight=1, minsize=col_width)
 
             if any(name == "OmegaF" for name, _ in items):
                 hint_row = 1 + ((len(items) - 1) // max_cols) * 2 + 2
@@ -599,7 +628,7 @@ class App:
 
         # Hint
         hint = ctk.CTkLabel(self.form_frame, text="* Required field", text_color="gray")
-        hint.pack(anchor="w", padx=8, pady=8)
+        hint.pack(anchor="w", padx=8, pady=(2, 4))
         self.param_widgets.append(hint)
 
     def clear_form(self):
@@ -613,15 +642,22 @@ class App:
         self.omega_hint_label = None
         self.omega_clear_btn = None
 
-    def clear_citation(self):
-        try:
-            self.citation_text.configure(state="normal")
-            self.citation_text.delete("1.0", "end")
-            self.citation_text.configure(state="disabled")
-        except Exception:
-            pass
+    # ------- Documentation / citation panel (shared docs_text widget) -------
+    def _set_docs_panel_text(self, text: str):
+        self.docs_text.configure(state="normal")
+        self.docs_text.delete("1.0", "end")
+        self.docs_text.insert("1.0", text)
+        self.docs_text.configure(state="disabled")
 
-    def update_citation(self, fn_name: str):
+    def _show_function_docs(self):
+        """Reset the right-hand panel to the current function's documentation."""
+        fn = get_callable(self.fn_var.get())
+        doc = (inspect.getdoc(fn) or "No documentation available.") if fn else "Function not found."
+        self._set_docs_panel_text(doc)
+        self.docs_title_label.configure(text="Documentation")
+        self.docs_back_btn.pack_forget()
+
+    def _build_citation_text(self, fn_name: str) -> str:
         text_parts = [CITATION_HEADER]
         body = CITATIONS.get(fn_name)
         if body:
@@ -629,11 +665,15 @@ class App:
         # Append wind exponent note for functions likely using wind reduction (UTCI, PET, mPET/mPET_quick, Tmrt)
         if fn_name in {"UTCI", "PET", "mPET", "mPET_quick", "Tmrt_calc"}:
             text_parts.append("\n" + WIND_EXPONENT_NOTE)
-        text = "".join(text_parts)
-        self.citation_text.configure(state="normal")
-        self.citation_text.delete("1.0", "end")
-        self.citation_text.insert("1.0", text)
-        self.citation_text.configure(state="disabled")
+        return "".join(text_parts)
+
+    def _show_citation(self, fn_name: str):
+        """Temporarily replace the Documentation panel with citation suggestions
+        for fn_name — shown after the user saves or copies output. The user
+        returns to normal docs via the back button (or by switching functions)."""
+        self._set_docs_panel_text(self._build_citation_text(fn_name))
+        self.docs_title_label.configure(text="Citation Suggestions")
+        self.docs_back_btn.pack(anchor="w", padx=8, pady=(4, 4))
 
     # ------- Progress helpers -------
     def show_progress(self, total: int):
@@ -832,13 +872,14 @@ class App:
         else:
             self.set_status("Completed")
 
-        out_df = self.normalize_results(results)
+        out_df = self.normalize_results(results, fn_name)
         # Include original columns alongside result
         joined = pd.concat([df.reset_index(drop=True), out_df], axis=1)
         self.current_output_df = joined
+        self.current_output_fn = fn_name
         self.render_table(joined)
-        # Show citation suggestions
-        self.update_citation(fn_name)
+        # Citation suggestions are shown on demand from Save Output / Copy to
+        # Clipboard (see _show_citation), not automatically after computing.
         # Finish progress and re-enable controls
         self.finish_progress()
         self.set_controls_enabled(True)
@@ -884,11 +925,12 @@ class App:
             kwargs[name] = val
         try:
             result = fn(**kwargs)
-            out_df = self.normalize_results([result])
+            out_df = self.normalize_results([result], fn_name)
             self.current_output_df = out_df
+            self.current_output_fn = fn_name
             self.render_table(out_df)
-            # Show citation suggestions
-            self.update_citation(fn_name)
+            # Citation suggestions are shown on demand from Save Output / Copy to
+            # Clipboard (see _show_citation), not automatically after computing.
             self.set_status("Completed")
         except Exception:
             buf = io.StringIO()
@@ -896,11 +938,12 @@ class App:
             messagebox.showerror("Execution error", buf.getvalue())
             self.set_status("Error")
 
-    def normalize_results(self, results: List[Any]) -> pd.DataFrame:
+    def normalize_results(self, results: List[Any], fn_name: str = "result") -> pd.DataFrame:
         """Convert function results to a DataFrame with reasonable columns.
-        - If result is a scalar, name column 'result'.
-        - If result is a tuple/list, create columns result_0, result_1, ...
-        - If result is a dict/Series, use keys as columns.
+        - If result is a scalar, name column after the selected function (e.g. 'UTCI').
+        - If result is a tuple/list, create columns named after the function (e.g. 'UTCI_0', 'UTCI_1', ...).
+        - If result is a dict/Series, use keys as columns (biometeo already names the
+          primary key after the function, e.g. mPET's dict has an 'mPET' key).
         - If result is a pandas object, try to convert accordingly.
         """
         if not results:
@@ -917,7 +960,7 @@ class App:
         # Tuples/lists
         elif isinstance(first, (list, tuple)):
             max_len = max(len(r) if isinstance(r, (list, tuple)) else 1 for r in results)
-            cols = [f"result_{i}" for i in range(max_len)]
+            cols = [f"{fn_name}_{i}" for i in range(max_len)]
             norm = []
             for r in results:
                 if isinstance(r, (list, tuple)):
@@ -927,8 +970,8 @@ class App:
                 norm.append(row)
             df = pd.DataFrame(norm, columns=cols)
         else:
-            # Scalars
-            df = pd.DataFrame({"result": results})
+            # Scalars (e.g. UTCI, SET) — name the column after the function itself
+            df = pd.DataFrame({fn_name: results})
         return df
 
     def get_decimals(self) -> int:
@@ -1018,6 +1061,7 @@ class App:
             else:
                 self.current_output_df.to_csv(path, index=False, float_format=f"%.{decimals}f")
             self.set_status(f"Saved to {path}")
+            self._notify_citation()
         except Exception as e:
             messagebox.showerror("Save error", str(e))
 
@@ -1041,8 +1085,22 @@ class App:
             self.root.clipboard_clear()
             self.root.clipboard_append(text)
             self.set_status(f"Copied {fmt.upper()} to clipboard")
+            self._notify_citation()
         except Exception as e:
             messagebox.showerror("Copy error", str(e))
+
+    def _notify_citation(self):
+        """After a successful Save/Copy, surface citation suggestions for the
+        function that produced the current output in the Documentation panel,
+        with a small popup pointing the user there."""
+        fn_name = self.current_output_fn or self.fn_var.get()
+        self._show_citation(fn_name)
+        messagebox.showinfo(
+            "Citation Suggestion",
+            f"Citation suggestions for {fn_name} are now shown on the right, "
+            "where Documentation was.\n\n"
+            "Click \"← Back to Documentation\" there when you're done to continue.",
+        )
 
     def on_clear_output(self):
         # Clear the table and related output state
@@ -1062,8 +1120,10 @@ class App:
             pass
         # Reset stored DataFrame
         self.current_output_df = None
-        # Also clear citation suggestions to avoid stale refs
-        self.clear_citation()
+        self.current_output_fn = None
+        # If a citation was being shown, go back to normal documentation
+        # since there's no output left for it to refer to.
+        self._show_function_docs()
         # Update status
         self.set_status("Cleared output")
 
@@ -1078,7 +1138,28 @@ def main():
     else:
         root = ctk.CTk()
     app = App(root)
-    root.geometry("1300x1000")
+    # Start close to maximized so the input form has enough height to show every
+    # field without scrolling; fall back to a large fixed size if the platform
+    # doesn't support a "zoomed" window state.
+    try:
+        root.state("zoomed")
+    except Exception:
+        try:
+            screen_w = root.winfo_screenwidth()
+            screen_h = root.winfo_screenheight()
+            root.geometry(f"{min(1600, screen_w - 40)}x{min(1100, screen_h - 80)}")
+        except Exception:
+            root.geometry("1400x1050")
+    root.minsize(1200, 800)
+    # Give the input-form pane most of the height by default (roughly 72%),
+    # now that the window has its real size, so forms show without scrolling.
+    root.update_idletasks()
+    try:
+        total_h = app.main_paned.winfo_height()
+        if total_h > 1:
+            app.main_paned.sashpos(0, int(total_h * 0.72))
+    except Exception:
+        pass
     root.mainloop()
 
 
