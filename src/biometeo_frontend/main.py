@@ -616,64 +616,76 @@ class App:
             )
             title.grid(row=0, column=0, columnspan=max_cols, sticky="w", padx=6, pady=(4, 3))
 
-            for idx, (name, param) in enumerate(items):
-                row = 1 + (idx // max_cols) * 2
-                col = idx % max_cols
+            slot = 0
+            last_row = 1
+            for name, param in items:
+                is_humidity = self._humidity_target is not None and name == self._humidity_target
+                span = 2 if is_humidity else 1
+
+                col = slot % max_cols
+                if col + span > max_cols:
+                    slot += max_cols - col
+                    col = 0
+                row = 1 + (slot // max_cols) * 2
+                last_row = row
 
                 ann = param.annotation
                 default = None if param.default is inspect._empty else param.default
                 required = param.default is inspect._empty
 
-                if self._humidity_target is not None and name == self._humidity_target:
+                if is_humidity:
                     box = ctk.CTkFrame(section, border_width=1, border_color="#2563eb", fg_color="transparent")
-                    box.grid(row=row, column=col, rowspan=2, sticky="nw", padx=6, pady=(2, 4))
-                    for sub_name in ("RH", "VP"):
+                    box.grid(row=row, column=col, columnspan=2, rowspan=2, sticky="nw", padx=6, pady=(2, 4))
+                    box.grid_columnconfigure(0, weight=1)
+                    box.grid_columnconfigure(1, weight=1)
+                    for sub_col, sub_name in enumerate(("RH", "VP")):
                         sub_lbl = ctk.CTkLabel(
                             box, text=LABEL_ALIASES.get(sub_name, sub_name), anchor="w", justify="left",
                             font=label_font, wraplength=col_width - 20,
                         )
-                        sub_lbl.pack(anchor="w", padx=4, pady=(4, 0))
+                        sub_lbl.grid(row=0, column=sub_col, sticky="w", padx=4, pady=(4, 0))
                         sub_entry = ctk.CTkEntry(box, width=col_width - 26)
-                        sub_entry.pack(anchor="w", padx=4, pady=(0, 2))
+                        sub_entry.grid(row=1, column=sub_col, sticky="w", padx=4, pady=(0, 2))
                         sub_entry.bind("<KeyRelease>", lambda e, entry=sub_entry: self._on_humidity_entry_changed(entry))
                         self.param_entries[sub_name] = (ann, sub_entry)
                     hint_lbl = ctk.CTkLabel(
                         box, text="(Enter RH or VP)", anchor="center",
                         font=ctk.CTkFont(size=10), text_color="gray",
                     )
-                    hint_lbl.pack(fill="x", padx=4, pady=(0, 4))
-                    continue
-
-                label_text = LABEL_ALIASES.get(name, name)
-                if required:
-                    label_text += " *"
+                    hint_lbl.grid(row=2, column=0, columnspan=2, sticky="ew", padx=4, pady=(0, 4))
                 else:
-                    label_text += f" ({default})"
-                lbl = ctk.CTkLabel(
-                    section, text=label_text, anchor="w", justify="left",
-                    font=label_font, wraplength=col_width - 12,
-                )
-                lbl.grid(row=row, column=col, sticky="w", padx=6, pady=(2, 0))
+                    label_text = LABEL_ALIASES.get(name, name)
+                    if required:
+                        label_text += " *"
+                    else:
+                        label_text += f" ({default})"
+                    lbl = ctk.CTkLabel(
+                        section, text=label_text, anchor="w", justify="left",
+                        font=label_font, wraplength=col_width - 12,
+                    )
+                    lbl.grid(row=row, column=col, sticky="w", padx=6, pady=(2, 0))
 
-                if ann in (bool, "bool") or isinstance(default, bool):
-                    var = ctk.BooleanVar(value=bool(default) if default is not None else False)
-                    cb = ctk.CTkCheckBox(section, text="", variable=var)
-                    cb.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 4))
-                    self.param_entries[name] = ("bool", var)
-                else:
-                    entry = ctk.CTkEntry(section, width=col_width - 18)
-                    if default is not None:
-                        entry.insert(0, str(default))
-                    entry.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 4))
-                    self.param_entries[name] = (ann, entry)
-                    if name == "OmegaF":
-                        self._omega_default_text_color = entry.cget("text_color")
+                    if ann in (bool, "bool") or isinstance(default, bool):
+                        var = ctk.BooleanVar(value=bool(default) if default is not None else False)
+                        cb = ctk.CTkCheckBox(section, text="", variable=var)
+                        cb.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 4))
+                        self.param_entries[name] = ("bool", var)
+                    else:
+                        entry = ctk.CTkEntry(section, width=col_width - 18)
+                        if default is not None:
+                            entry.insert(0, str(default))
+                        entry.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 4))
+                        self.param_entries[name] = (ann, entry)
+                        if name == "OmegaF":
+                            self._omega_default_text_color = entry.cget("text_color")
+
+                slot += span
 
             for c in range(max_cols):
                 section.grid_columnconfigure(c, weight=1, minsize=col_width)
 
             if any(name == "OmegaF" for name, _ in items):
-                hint_row = 1 + ((len(items) - 1) // max_cols) * 2 + 2
+                hint_row = last_row + 2
                 self.omega_hint_label = ctk.CTkLabel(section, text="", anchor="w", font=ctk.CTkFont(size=11))
                 self.omega_hint_label.grid(
                     row=hint_row, column=0, columnspan=max_cols, sticky="w", padx=6, pady=(0, 2)
