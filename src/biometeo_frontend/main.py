@@ -591,16 +591,6 @@ class App:
         sig = inspect.signature(fn)
         params = [(n, p) for n, p in sig.parameters.items() if n not in ("self", "cls")]
         self._humidity_target = humidity_target_param(sig)
-        if self._humidity_target is not None:
-            other = "VP" if self._humidity_target == "RH" else "RH"
-            expanded = []
-            for name, param in params:
-                if name == self._humidity_target:
-                    expanded.append((self._humidity_target, param))
-                    expanded.append((other, param))
-                else:
-                    expanded.append((name, param))
-            params = expanded
         grouped: Dict[str, List] = {key: [] for key in GROUP_ORDER}
         for name, param in params:
             grouped[PARAM_GROUP_MAP.get(name, "other")].append((name, param))
@@ -634,10 +624,28 @@ class App:
                 default = None if param.default is inspect._empty else param.default
                 required = param.default is inspect._empty
 
+                if self._humidity_target is not None and name == self._humidity_target:
+                    box = ctk.CTkFrame(section, border_width=1, border_color="#2563eb", fg_color="transparent")
+                    box.grid(row=row, column=col, rowspan=2, sticky="nw", padx=6, pady=(2, 4))
+                    for sub_name in ("RH", "VP"):
+                        sub_lbl = ctk.CTkLabel(
+                            box, text=LABEL_ALIASES.get(sub_name, sub_name), anchor="w", justify="left",
+                            font=label_font, wraplength=col_width - 20,
+                        )
+                        sub_lbl.pack(anchor="w", padx=4, pady=(4, 0))
+                        sub_entry = ctk.CTkEntry(box, width=col_width - 26)
+                        sub_entry.pack(anchor="w", padx=4, pady=(0, 2))
+                        sub_entry.bind("<KeyRelease>", lambda e, entry=sub_entry: self._on_humidity_entry_changed(entry))
+                        self.param_entries[sub_name] = (ann, sub_entry)
+                    hint_lbl = ctk.CTkLabel(
+                        box, text="(Enter RH or VP)", anchor="center",
+                        font=ctk.CTkFont(size=10), text_color="gray",
+                    )
+                    hint_lbl.pack(fill="x", padx=4, pady=(0, 4))
+                    continue
+
                 label_text = LABEL_ALIASES.get(name, name)
-                if self._humidity_target is not None and name in ("RH", "VP"):
-                    label_text += " (enter RH or VP) *"
-                elif required:
+                if required:
                     label_text += " *"
                 else:
                     label_text += f" ({default})"
@@ -660,8 +668,6 @@ class App:
                     self.param_entries[name] = (ann, entry)
                     if name == "OmegaF":
                         self._omega_default_text_color = entry.cget("text_color")
-                    if self._humidity_target is not None and name in ("RH", "VP"):
-                        entry.bind("<KeyRelease>", lambda e, entry=entry: self._on_humidity_entry_changed(entry))
 
             for c in range(max_cols):
                 section.grid_columnconfigure(c, weight=1, minsize=col_width)
@@ -685,14 +691,6 @@ class App:
         hint = ctk.CTkLabel(self.form_frame, text="* Required field", text_color="gray")
         hint.pack(anchor="w", padx=8, pady=(2, 4))
         self.param_widgets.append(hint)
-        if self._humidity_target is not None:
-            humidity_hint = ctk.CTkLabel(
-                self.form_frame,
-                text="Enter either RH or VP (not both) — the other is computed automatically.",
-                text_color="gray",
-            )
-            humidity_hint.pack(anchor="w", padx=8, pady=(0, 4))
-            self.param_widgets.append(humidity_hint)
 
     def clear_form(self):
         for w in self.param_widgets:

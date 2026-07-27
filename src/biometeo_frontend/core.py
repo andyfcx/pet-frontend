@@ -256,25 +256,9 @@ def resolve_humidity_value(target: str, Ta: Any, RH: Optional[float], VP: Option
 
 
 def group_signature_params(fn: Callable) -> Dict[str, List[Tuple[str, inspect.Parameter]]]:
-    """Group a callable's parameters into labeled sections, in GROUP_ORDER.
-
-    When the callable accepts exactly one of RH/VP, both fields are included
-    (sharing that parameter's spec) so the form can offer either as input;
-    see humidity_target_param() and resolve_humidity_value().
-    """
+    """Group a callable's parameters into labeled sections, in GROUP_ORDER."""
     sig = inspect.signature(fn)
     params = [(n, p) for n, p in sig.parameters.items() if n not in ("self", "cls")]
-    target = humidity_target_param(sig)
-    if target is not None:
-        other = "VP" if target == "RH" else "RH"
-        expanded = []
-        for name, param in params:
-            if name == target:
-                expanded.append((target, param))
-                expanded.append((other, param))
-            else:
-                expanded.append((name, param))
-        params = expanded
     grouped: Dict[str, List[Tuple[str, inspect.Parameter]]] = {key: [] for key in GROUP_ORDER}
     for name, param in params:
         grouped[PARAM_GROUP_MAP.get(name, "other")].append((name, param))

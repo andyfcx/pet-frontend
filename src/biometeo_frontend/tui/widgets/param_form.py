@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from textual import events
 from textual.binding import Binding
-from textual.containers import Grid, Vertical, VerticalScroll
+from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Checkbox, Input, Label
 
 from biometeo_frontend import core
@@ -78,6 +78,26 @@ class ParamForm(VerticalScroll):
         color: $success;
         text-style: bold;
     }
+    ParamForm .humidity-box {
+        border: solid blue;
+        padding: 0 1;
+        height: auto;
+        column-span: 2;
+    }
+    ParamForm .humidity-row {
+        height: auto;
+    }
+    ParamForm .humidity-col {
+        width: 1fr;
+        height: auto;
+        margin-right: 1;
+    }
+    ParamForm .humidity-hint {
+        color: $text-muted;
+        text-align: center;
+        width: 1fr;
+        height: 1;
+    }
     """
 
     BINDINGS = [
@@ -133,13 +153,33 @@ class ParamForm(VerticalScroll):
                 default = None if param.default is inspect._empty else param.default
                 required = param.default is inspect._empty
 
+                if self._humidity_target is not None and name == self._humidity_target:
+                    rh_input = GridInput(value="", owner_form=self)
+                    vp_input = GridInput(value="", owner_form=self)
+                    self.param_entries["RH"] = (ann, rh_input)
+                    self.param_entries["VP"] = (ann, vp_input)
+                    field_widgets.append(rh_input)
+                    cells.append(Vertical(
+                        Horizontal(
+                            Vertical(
+                                Label(core.LABEL_ALIASES.get("RH", "RH"), classes="param-label"),
+                                rh_input,
+                                classes="humidity-col",
+                            ),
+                            Vertical(
+                                Label(core.LABEL_ALIASES.get("VP", "VP"), classes="param-label"),
+                                vp_input,
+                                classes="humidity-col",
+                            ),
+                            classes="humidity-row",
+                        ),
+                        Label("(Enter RH or VP)", classes="humidity-hint"),
+                        classes="param-cell humidity-box",
+                    ))
+                    continue
+
                 label_text = core.LABEL_ALIASES.get(name, name)
-                if self._humidity_target is not None and name in ("RH", "VP"):
-                    label_text += " (enter RH or VP) *"
-                elif required:
-                    label_text += " *"
-                else:
-                    label_text += f" ({default})"
+                label_text += " *" if required else f" ({default})"
 
                 if ann in (bool, "bool") or isinstance(default, bool):
                     widget = Checkbox(value=bool(default) if default is not None else False)
@@ -163,11 +203,6 @@ class ParamForm(VerticalScroll):
             sections.append(Vertical(*section_children))
 
         sections.append(Label("* Required field", classes="required-hint"))
-        if self._humidity_target is not None:
-            sections.append(Label(
-                "Enter either RH or VP (not both) — the other is computed automatically.",
-                classes="required-hint",
-            ))
         self.mount_all(sections)
         self.call_after_refresh(self._update_column_count, self.size.width)
 
