@@ -361,20 +361,12 @@ class App:
         self.fisheye_toggle_btn.pack(fill="x", padx=4, pady=4)
         self.fisheye_body = ctk.CTkFrame(self.fisheye_section, fg_color="transparent")
 
-        # Bottom: output table
-        self.bottom_frame = ctk.CTkFrame(self.bottom_pane)
-        bottom = self.bottom_frame
-        self.bottom_frame.pack(side="bottom", fill="both", expand=True, padx=8, pady=(0, 8))
-
-        self.table = ttk.Treeview(bottom, show="headings")
-        self.table.pack(side="left", fill="both", expand=True)
-        self.table.bind("<Button-1>", self.on_table_click_copy)
-
-        yscroll = ttk.Scrollbar(bottom, orient="vertical", command=self.table.yview)
-        yscroll.pack(side="right", fill="y")
-        self.table.configure(yscrollcommand=yscroll.set)
-
-        # Output controls (format selector, Save, Copy) placed near the table
+        # Output controls (format selector, Save, Copy) — packed into bottom_pane
+        # BEFORE the (expand=True) table below. pack() gives priority to fixed-size
+        # "bottom" siblings in the order they're added, so packing this fixed-height
+        # row first guarantees it a slot even while the window is still at its tiny
+        # pre-layout size; packing it after the expanding table risked it being
+        # squeezed to nothing during that first layout pass.
         self.output_controls = ctk.CTkFrame(self.bottom_pane)
         self.output_controls.pack(side="bottom", fill="x", expand=False, padx=8, pady=(0, 8))
         ctk.CTkLabel(self.output_controls, text="Output:").pack(side="left", padx=(8, 4))
@@ -402,7 +394,8 @@ class App:
         self.clear_btn = ctk.CTkButton(self.output_controls, text="Clear", command=self.on_clear_output)
         self.clear_btn.pack(side="left", padx=(0, 8))
 
-        # Progress area (shown during CSV processing)
+        # Progress area (shown during CSV processing) — also packed before the
+        # table for the same reason.
         self.progress_frame = ctk.CTkFrame(self.bottom_pane)
         self.progress_label = ctk.CTkLabel(self.progress_frame, text="Processing CSV…")
         self.progress_label.pack(anchor="w", padx=8, pady=(4, 0))
@@ -416,6 +409,20 @@ class App:
             self.progress_frame.pack_forget()
         except Exception:
             pass
+
+        # Bottom: output table — packed last (after the fixed-height rows above)
+        # so it absorbs whatever height remains via expand=True.
+        self.bottom_frame = ctk.CTkFrame(self.bottom_pane)
+        bottom = self.bottom_frame
+        self.bottom_frame.pack(side="bottom", fill="both", expand=True, padx=8, pady=(0, 8))
+
+        self.table = ttk.Treeview(bottom, show="headings")
+        self.table.pack(side="left", fill="both", expand=True)
+        self.table.bind("<Button-1>", self.on_table_click_copy)
+
+        yscroll = ttk.Scrollbar(bottom, orient="vertical", command=self.table.yview)
+        yscroll.pack(side="right", fill="y")
+        self.table.configure(yscrollcommand=yscroll.set)
 
         # Citation suggestions are no longer a fixed panel (it left little room for
         # the output table); they're shown in the Documentation panel on demand,
@@ -1137,10 +1144,12 @@ def main():
         root = TkinterDnD.Tk()
     else:
         root = ctk.CTk()
-    app = App(root)
-    # Start close to maximized so the input form has enough height to show every
-    # field without scrolling; fall back to a large fixed size if the platform
-    # doesn't support a "zoomed" window state.
+
+    # Size the window to its final (near-maximized) dimensions BEFORE building
+    # any widgets. Building the form/table/output-controls into a window that's
+    # still at Tk's tiny pre-geometry default size, then resizing afterward,
+    # risked some fixed-height rows (e.g. the output controls) being computed
+    # with zero space during that first layout pass and never properly shown.
     try:
         root.state("zoomed")
     except Exception:
@@ -1151,6 +1160,10 @@ def main():
         except Exception:
             root.geometry("1400x1050")
     root.minsize(1200, 800)
+    root.update_idletasks()
+
+    app = App(root)
+
     # Give the input-form pane most of the height by default (roughly 72%),
     # now that the window has its real size, so forms show without scrolling.
     root.update_idletasks()
