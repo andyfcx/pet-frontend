@@ -3,13 +3,14 @@ import io
 import sys
 import traceback
 import json
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 
 # UI libs
 import customtkinter as ctk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import PhotoImage, ttk, filedialog, messagebox
 
 # Drag and drop support
 try:
@@ -29,6 +30,7 @@ else:
 
 
 APP_TITLE = "Biometeo UI"
+APP_ICON_PATH = Path(__file__).parent / "assets" / "icon.png"
 HIGHLIGHT_COLOR = ("#0f9d58", "#4ade80")
 # Documentation panel is intentionally narrow so the input form gets the
 # width it needs to lay out without vertical scrolling; long docs remain
@@ -199,6 +201,20 @@ def get_callable(name: str) -> Optional[Callable]:
     if callable(fn):
         return fn
     return None
+
+
+def apply_app_icon(root: Any) -> bool:
+    """Apply the packaged icon to a Tk root window when the platform supports it."""
+    try:
+        icon_image = PhotoImage(file=str(APP_ICON_PATH))
+        root.iconphoto(True, icon_image)
+        # PhotoImage removes its Tcl image when garbage-collected, so retain it
+        # for as long as the root window exists.
+        root._biometeo_icon_image = icon_image
+        return True
+    except Exception:
+        # An unavailable window-manager icon should never prevent app startup.
+        return False
 
 
 def humidity_target_param(sig: inspect.Signature) -> Optional[str]:
@@ -1256,6 +1272,8 @@ def main():
         root = TkinterDnD.Tk()
     else:
         root = ctk.CTk()
+
+    apply_app_icon(root)
 
     # Size the window to its final (near-maximized) dimensions BEFORE building
     # any widgets. Building the form/table/output-controls into a window that's

@@ -13,6 +13,12 @@ APP_VERSION = os.environ.get("APP_VERSION", "0.2.1")
 
 datas = collect_data_files("customtkinter")
 datas += collect_data_files("tkinterdnd2")
+datas += [
+    (
+        str(SRC / "biometeo_frontend" / "assets" / "icon.png"),
+        "biometeo_frontend/assets",
+    )
+]
 binaries = collect_dynamic_libs("tkinterdnd2")
 
 a = Analysis(
