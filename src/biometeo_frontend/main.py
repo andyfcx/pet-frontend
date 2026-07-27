@@ -201,6 +201,35 @@ def get_callable(name: str) -> Optional[Callable]:
     return None
 
 
+def humidity_target_param(sig: inspect.Signature) -> Optional[str]:
+    """Return 'RH' or 'VP' if the callable accepts exactly one of the two
+    humidity parameters, else None (neither, or both independently)."""
+    has_vp = "VP" in sig.parameters
+    has_rh = "RH" in sig.parameters
+    if has_vp and not has_rh:
+        return "VP"
+    if has_rh and not has_vp:
+        return "RH"
+    return None
+
+
+def resolve_humidity_value(target: str, Ta: Any, RH: Optional[float], VP: Optional[float]) -> float:
+    """Return the value for the humidity parameter `target` ('RH' or 'VP')
+    that a biometeo function needs, given the user's mutually-exclusive RH/VP
+    input. Converts via biometeo.VP_RH_exchange when the user supplied the
+    other unit instead.
+    """
+    if RH is not None and VP is not None:
+        raise ValueError("Enter only one of RH or VP, not both")
+    if RH is None and VP is None:
+        raise ValueError("Enter a value for RH or VP")
+    if (target == "RH" and RH is not None) or (target == "VP" and VP is not None):
+        return RH if target == "RH" else VP
+    if bm is None:
+        raise RuntimeError(f"biometeo is not available: {bm_import_error}")
+    return bm.VP_RH_exchange(Ta=Ta, RH=RH, VP=VP)[target]
+
+
 def parse_value(text: str, annotation: Any) -> Any:
     """Parse text to python value based on type annotation if possible.
     Falls back to float, int, bool, or str heuristics.
@@ -283,8 +312,9 @@ class App:
         self.open_btn = ctk.CTkButton(top, text="Open CSV", command=self.on_open_csv)
         self.open_btn.pack(side="left", padx=8)
 
-        self.run_btn = ctk.CTkButton(top, text="Run", command=self.on_run_single)
+        self.run_btn = ctk.CTkButton(top, text="Run (Shift+Enter)", command=self.on_run_single)
         self.run_btn.pack(side="left", padx=8)
+        self.root.bind_all("<Shift-Return>", lambda e: self.on_run_single())
 
 
         self.status_var = ctk.StringVar(value="Ready")
@@ -431,6 +461,9 @@ class App:
         # Storage for dynamic widgets and data
         self.param_entries: Dict[str, Any] = {}
         self.param_widgets: List[Any] = []
+        # 'RH' or 'VP' when the current function accepts exactly one of the
+        # two and the form offers both fields as mutually-exclusive inputs.
+        self._humidity_target: Optional[str] = None
         self.current_output_df: Optional[pd.DataFrame] = None
         self.current_output_fn: Optional[str] = None
         self.fisheye_view = None
@@ -557,6 +590,17 @@ class App:
         # physiological info, meteorological data, other).
         sig = inspect.signature(fn)
         params = [(n, p) for n, p in sig.parameters.items() if n not in ("self", "cls")]
+        self._humidity_target = humidity_target_param(sig)
+        if self._humidity_target is not None:
+            other = "VP" if self._humidity_target == "RH" else "RH"
+            expanded = []
+            for name, param in params:
+                if name == self._humidity_target:
+                    expanded.append((self._humidity_target, param))
+                    expanded.append((other, param))
+                else:
+                    expanded.append((name, param))
+            params = expanded
         grouped: Dict[str, List] = {key: [] for key in GROUP_ORDER}
         for name, param in params:
             grouped[PARAM_GROUP_MAP.get(name, "other")].append((name, param))
@@ -591,7 +635,9 @@ class App:
                 required = param.default is inspect._empty
 
                 label_text = LABEL_ALIASES.get(name, name)
-                if required:
+                if self._humidity_target is not None and name in ("RH", "VP"):
+                    label_text += " (enter RH or VP) *"
+                elif required:
                     label_text += " *"
                 else:
                     label_text += f" ({default})"
@@ -614,6 +660,8 @@ class App:
                     self.param_entries[name] = (ann, entry)
                     if name == "OmegaF":
                         self._omega_default_text_color = entry.cget("text_color")
+                    if self._humidity_target is not None and name in ("RH", "VP"):
+                        entry.bind("<KeyRelease>", lambda e, entry=entry: self._on_humidity_entry_changed(entry))
 
             for c in range(max_cols):
                 section.grid_columnconfigure(c, weight=1, minsize=col_width)
@@ -637,6 +685,14 @@ class App:
         hint = ctk.CTkLabel(self.form_frame, text="* Required field", text_color="gray")
         hint.pack(anchor="w", padx=8, pady=(2, 4))
         self.param_widgets.append(hint)
+        if self._humidity_target is not None:
+            humidity_hint = ctk.CTkLabel(
+                self.form_frame,
+                text="Enter either RH or VP (not both) — the other is computed automatically.",
+                text_color="gray",
+            )
+            humidity_hint.pack(anchor="w", padx=8, pady=(0, 4))
+            self.param_widgets.append(humidity_hint)
 
     def clear_form(self):
         for w in self.param_widgets:
@@ -648,6 +704,25 @@ class App:
         self.param_entries.clear()
         self.omega_hint_label = None
         self.omega_clear_btn = None
+
+    def _on_humidity_entry_changed(self, entry):
+        """Enforce RH/VP mutual exclusion: filling one disables (and clears)
+        the other, since only one may be entered at a time."""
+        if self._humidity_target is None:
+            return
+        rh_ann, rh_entry = self.param_entries.get("RH", (None, None))
+        vp_ann, vp_entry = self.param_entries.get("VP", (None, None))
+        if not isinstance(rh_entry, ctk.CTkEntry) or not isinstance(vp_entry, ctk.CTkEntry):
+            return
+        other = vp_entry if entry is rh_entry else rh_entry if entry is vp_entry else None
+        if other is None:
+            return
+        if entry.get().strip():
+            if other.get():
+                other.delete(0, "end")
+            other.configure(state="disabled")
+        else:
+            other.configure(state="normal")
 
     # ------- Documentation / citation panel (shared docs_text widget) -------
     def _set_docs_panel_text(self, text: str):
@@ -802,6 +877,11 @@ class App:
             name for name, p in sig.parameters.items()
             if name not in ("self", "cls") and p.default is inspect._empty
         )
+        target = humidity_target_param(sig)
+        if target is not None:
+            required.discard(target)
+            if not (cols & {"RH", "VP"}):
+                required.add("RH or VP")
         missing = required - cols
         if missing:
             return f"Missing required columns: {', '.join(sorted(missing))}"
@@ -825,11 +905,12 @@ class App:
             return
 
         # Build argument rows
+        target = humidity_target_param(sig)
         rows_args: List[Dict[str, Any]] = []
         for _, row in df.iterrows():
             kwargs = {}
             for name, p in sig.parameters.items():
-                if name in ("self", "cls"):
+                if name in ("self", "cls") or name == target:
                     continue
                 ann = p.annotation
                 if name in df.columns:
@@ -843,6 +924,14 @@ class App:
                         return
                     parsed = p.default
                 kwargs[name] = parsed
+            if target is not None:
+                target_ann = sig.parameters[target].annotation
+                rh_val = parse_value(row["RH"], target_ann) if "RH" in df.columns and not pd.isna(row["RH"]) else None
+                vp_val = parse_value(row["VP"], target_ann) if "VP" in df.columns and not pd.isna(row["VP"]) else None
+                try:
+                    kwargs[target] = resolve_humidity_value(target, kwargs.get("Ta"), rh_val, vp_val)
+                except (ValueError, RuntimeError):
+                    kwargs[target] = None
             rows_args.append(kwargs)
 
         # Prepare progress and disable controls
@@ -901,9 +990,10 @@ class App:
         if fn_name == "Tmrt_calc" and self._fisheye_svf_info is not None:
             self._apply_fisheye_svf_to_form()
         sig = inspect.signature(fn)
+        target = humidity_target_param(sig)
         kwargs = {}
         for name, p in sig.parameters.items():
-            if name in ("self", "cls"):
+            if name in ("self", "cls") or name == target:
                 continue
             ann, widget = self.param_entries.get(name, (None, None))
             if widget is None:
@@ -930,6 +1020,18 @@ class App:
                     except Exception:
                         val = None
             kwargs[name] = val
+
+        if target is not None:
+            target_ann, _ = self.param_entries.get(target, (None, None))
+            _, rh_entry = self.param_entries.get("RH", (None, None))
+            _, vp_entry = self.param_entries.get("VP", (None, None))
+            rh_val = parse_value(rh_entry.get(), target_ann) if isinstance(rh_entry, ctk.CTkEntry) else None
+            vp_val = parse_value(vp_entry.get(), target_ann) if isinstance(vp_entry, ctk.CTkEntry) else None
+            try:
+                kwargs[target] = resolve_humidity_value(target, kwargs.get("Ta"), rh_val, vp_val)
+            except (ValueError, RuntimeError) as e:
+                messagebox.showerror("Missing input", str(e))
+                return
         try:
             result = fn(**kwargs)
             out_df = self.normalize_results([result], fn_name)

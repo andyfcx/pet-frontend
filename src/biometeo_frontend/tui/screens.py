@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 from textual import work
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import Screen
@@ -104,6 +105,10 @@ class MainScreen(Screen):
         width: auto;
     }
     """
+
+    BINDINGS = [
+        Binding("shift+enter", "run_single", "Run", show=True),
+    ]
 
     fisheye_svf_info: reactive[Optional[Dict[str, Any]]] = reactive(None)
 
@@ -327,11 +332,12 @@ class MainScreen(Screen):
             self.app.notify(err, severity="error")
             return
 
+        target = core.humidity_target_param(sig)
         rows_args: List[Dict[str, Any]] = []
         for _, row in df.iterrows():
             kwargs = {}
             for name, p in sig.parameters.items():
-                if name in ("self", "cls"):
+                if name in ("self", "cls") or name == target:
                     continue
                 ann = p.annotation
                 if name in df.columns:
@@ -342,6 +348,14 @@ class MainScreen(Screen):
                 else:
                     parsed = p.default
                 kwargs[name] = parsed
+            if target is not None:
+                target_ann = sig.parameters[target].annotation
+                rh_val = parse_value(row["RH"], target_ann) if "RH" in df.columns and not pd.isna(row["RH"]) else None
+                vp_val = parse_value(row["VP"], target_ann) if "VP" in df.columns and not pd.isna(row["VP"]) else None
+                try:
+                    kwargs[target] = core.resolve_humidity_value(target, kwargs.get("Ta"), rh_val, vp_val)
+                except (ValueError, RuntimeError):
+                    kwargs[target] = None
             rows_args.append(kwargs)
 
         progress = self.query_one("#csv-progress", ProgressBar)
@@ -401,6 +415,9 @@ class MainScreen(Screen):
             self.query_one(wid).disabled = not enabled
 
     # ------- Manual run -------
+    def action_run_single(self) -> None:
+        self._on_run_single()
+
     def _on_run_single(self) -> None:
         fn_name = self.query_one("#fn-select", Select).value
         fn = get_callable(fn_name)

@@ -93,6 +93,9 @@ class ParamForm(VerticalScroll):
         self.omega_hint: Optional[Label] = None
         self.omega_clear_btn: Optional[Button] = None
         self.current_fn_name: Optional[str] = None
+        # 'RH' or 'VP' when the current function accepts exactly one of the
+        # two and the form offers both fields as mutually-exclusive inputs.
+        self._humidity_target: Optional[str] = None
         # Rows of field widgets (Input/Checkbox), in visual grid order, used
         # for arrow-key navigation between cells (see move_focus()).
         self._nav_rows: List[List[Any]] = []
@@ -106,6 +109,7 @@ class ParamForm(VerticalScroll):
         self.param_entries = {}
         self.omega_hint = None
         self.omega_clear_btn = None
+        self._humidity_target = None
         self._nav_rows = []
         self._nav_groups = []
 
@@ -114,6 +118,7 @@ class ParamForm(VerticalScroll):
             self.mount(Label(f"Function {fn_name} not found"))
             return
 
+        self._humidity_target = core.humidity_target_param(inspect.signature(fn))
         grouped = core.group_signature_params(fn)
         sections = []
         for group_key in core.GROUP_ORDER:
@@ -129,7 +134,12 @@ class ParamForm(VerticalScroll):
                 required = param.default is inspect._empty
 
                 label_text = core.LABEL_ALIASES.get(name, name)
-                label_text += " *" if required else f" ({default})"
+                if self._humidity_target is not None and name in ("RH", "VP"):
+                    label_text += " (enter RH or VP) *"
+                elif required:
+                    label_text += " *"
+                else:
+                    label_text += f" ({default})"
 
                 if ann in (bool, "bool") or isinstance(default, bool):
                     widget = Checkbox(value=bool(default) if default is not None else False)
@@ -153,6 +163,11 @@ class ParamForm(VerticalScroll):
             sections.append(Vertical(*section_children))
 
         sections.append(Label("* Required field", classes="required-hint"))
+        if self._humidity_target is not None:
+            sections.append(Label(
+                "Enter either RH or VP (not both) — the other is computed automatically.",
+                classes="required-hint",
+            ))
         self.mount_all(sections)
         self.call_after_refresh(self._update_column_count, self.size.width)
 
@@ -216,6 +231,28 @@ class ParamForm(VerticalScroll):
         if self.screen.focused is not None:
             self.move_focus(self.screen.focused, 0, 1)
 
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Enforce RH/VP mutual exclusion: filling one disables (and clears)
+        the other, since only one may be entered at a time."""
+        if self._humidity_target is None:
+            return
+        rh_widget = self.param_entries.get("RH", (None, None))[1]
+        vp_widget = self.param_entries.get("VP", (None, None))[1]
+        if event.input is rh_widget:
+            other = vp_widget
+        elif event.input is vp_widget:
+            other = rh_widget
+        else:
+            return
+        if other is None:
+            return
+        if event.value.strip():
+            if other.value:
+                other.value = ""
+            other.disabled = True
+        else:
+            other.disabled = False
+
     def read_values(self) -> Dict[str, Any]:
         """Read and parse current form values, raising ValueError on a missing
         required field (mirrors on_run_single's validation, main.py).
@@ -224,9 +261,10 @@ class ParamForm(VerticalScroll):
         if fn is None:
             raise ValueError(f"Function {self.current_fn_name} not found")
         sig = inspect.signature(fn)
+        target = core.humidity_target_param(sig)
         kwargs: Dict[str, Any] = {}
         for name, p in sig.parameters.items():
-            if name in ("self", "cls"):
+            if name in ("self", "cls") or name == target:
                 continue
             ann, widget = self.param_entries.get(name, (None, None))
             if widget is None:
@@ -241,4 +279,12 @@ class ParamForm(VerticalScroll):
                 if text == "" and p.default is not inspect._empty:
                     val = p.default
             kwargs[name] = val
+
+        if target is not None:
+            target_ann = self.param_entries.get(target, (None, None))[0]
+            rh_widget = self.param_entries.get("RH", (None, None))[1]
+            vp_widget = self.param_entries.get("VP", (None, None))[1]
+            rh_val = core.parse_value(rh_widget.value, target_ann) if isinstance(rh_widget, Input) else None
+            vp_val = core.parse_value(vp_widget.value, target_ann) if isinstance(vp_widget, Input) else None
+            kwargs[target] = core.resolve_humidity_value(target, kwargs.get("Ta"), rh_val, vp_val)
         return kwargs

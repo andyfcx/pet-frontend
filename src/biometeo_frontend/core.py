@@ -226,10 +226,55 @@ def parse_value(text: str, annotation: Any) -> Any:
         return s
 
 
+def humidity_target_param(sig: inspect.Signature) -> Optional[str]:
+    """Return 'RH' or 'VP' if the callable accepts exactly one of the two
+    humidity parameters, else None (neither, or both independently)."""
+    has_vp = "VP" in sig.parameters
+    has_rh = "RH" in sig.parameters
+    if has_vp and not has_rh:
+        return "VP"
+    if has_rh and not has_vp:
+        return "RH"
+    return None
+
+
+def resolve_humidity_value(target: str, Ta: Any, RH: Optional[float], VP: Optional[float]) -> float:
+    """Return the value for the humidity parameter `target` ('RH' or 'VP')
+    that a biometeo function needs, given the user's mutually-exclusive RH/VP
+    input. Converts via biometeo.VP_RH_exchange when the user supplied the
+    other unit instead.
+    """
+    if RH is not None and VP is not None:
+        raise ValueError("Enter only one of RH or VP, not both")
+    if RH is None and VP is None:
+        raise ValueError("Enter a value for RH or VP")
+    if (target == "RH" and RH is not None) or (target == "VP" and VP is not None):
+        return RH if target == "RH" else VP
+    if bm is None:
+        raise RuntimeError(f"biometeo is not available: {bm_import_error}")
+    return bm.VP_RH_exchange(Ta=Ta, RH=RH, VP=VP)[target]
+
+
 def group_signature_params(fn: Callable) -> Dict[str, List[Tuple[str, inspect.Parameter]]]:
-    """Group a callable's parameters into labeled sections, in GROUP_ORDER."""
+    """Group a callable's parameters into labeled sections, in GROUP_ORDER.
+
+    When the callable accepts exactly one of RH/VP, both fields are included
+    (sharing that parameter's spec) so the form can offer either as input;
+    see humidity_target_param() and resolve_humidity_value().
+    """
     sig = inspect.signature(fn)
     params = [(n, p) for n, p in sig.parameters.items() if n not in ("self", "cls")]
+    target = humidity_target_param(sig)
+    if target is not None:
+        other = "VP" if target == "RH" else "RH"
+        expanded = []
+        for name, param in params:
+            if name == target:
+                expanded.append((target, param))
+                expanded.append((other, param))
+            else:
+                expanded.append((name, param))
+        params = expanded
     grouped: Dict[str, List[Tuple[str, inspect.Parameter]]] = {key: [] for key in GROUP_ORDER}
     for name, param in params:
         grouped[PARAM_GROUP_MAP.get(name, "other")].append((name, param))
@@ -253,6 +298,11 @@ def validate_headers(df: pd.DataFrame, sig: inspect.Signature) -> Optional[str]:
         name for name, p in sig.parameters.items()
         if name not in ("self", "cls") and p.default is inspect._empty
     )
+    target = humidity_target_param(sig)
+    if target is not None:
+        required.discard(target)
+        if not (cols & {"RH", "VP"}):
+            required.add("RH or VP")
     missing = required - cols
     if missing:
         return f"Missing required columns: {', '.join(sorted(missing))}"
