@@ -33,7 +33,12 @@ if [[ "${TARGET_ARCH}" == "arm64" ]]; then
 fi
 
 PYTHON_REQUEST="cpython-${PYTHON_VERSION}-macos-${UV_ARCH}-none"
-PYTHON_BIN="$(uv python find "${PYTHON_REQUEST}" 2>/dev/null || true)"
+# --managed-python forces uv's own downloaded CPython (self-contained Tcl/Tk)
+# instead of a system interpreter (e.g. Homebrew's python@3.13, which ships
+# without a working tkinter unless python-tk is separately installed). Using
+# the system interpreter silently produces a build with tkinter excluded,
+# which crashes at startup with "ModuleNotFoundError: No module named 'tkinter'".
+PYTHON_BIN="$(uv python find --managed-python "${PYTHON_REQUEST}" 2>/dev/null || true)"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "This script must run on macOS." >&2
@@ -51,10 +56,10 @@ HOST_ARCH="$(uname -m)"
 
 if [[ -z "${PYTHON_BIN}" || ! -x "${PYTHON_BIN}" ]]; then
   echo "Installing uv-managed Python ${PYTHON_VERSION} for ${TARGET_ARCH}"
-  uv python install "${PYTHON_REQUEST}"
+  uv python install --managed-python "${PYTHON_REQUEST}"
 fi
 
-PYTHON_BIN="$(uv python find "${PYTHON_REQUEST}")"
+PYTHON_BIN="$(uv python find --managed-python "${PYTHON_REQUEST}")"
 
 if [[ ! -x "${PYTHON_BIN}" ]]; then
   echo "Expected Python interpreter not found at ${PYTHON_BIN}" >&2
@@ -101,6 +106,12 @@ TARGET_ARCH="${TARGET_ARCH}" APP_VERSION="${VERSION}" "${PYINSTALLER_RUNNER[@]}"
 APP_PATH="${DIST_DIR}/${APP_BUNDLE}"
 if [[ ! -d "${APP_PATH}" ]]; then
   echo "Expected app bundle not found at ${APP_PATH}" >&2
+  exit 1
+fi
+
+WARN_FILE="${BUILD_DIR}/run/warn-run.txt"
+if [[ -f "${WARN_FILE}" ]] && grep -q "tkinter installation is broken" "${WARN_FILE}"; then
+  echo "PyInstaller excluded tkinter from the build (broken interpreter) - the packaged app would crash on launch." >&2
   exit 1
 fi
 
