@@ -170,7 +170,7 @@ PARAM_GROUP_MAP: Dict[str, str] = {
 }
 LABEL_ALIASES: Dict[str, str] = {
     "day_of_year": "Date (YYYY-MM-DD)",
-    "hour_of_day": "Hour of Day",
+    "hour_of_day": "Time (HH:MM)",
     "longitude": "Longitude",
     "latitude": "Latitude",
     "sea_level_height": "Altitude",
@@ -236,6 +236,23 @@ def date_str_to_day_of_year(date_str: str) -> int:
     except ValueError as e:
         raise ValueError(f"Invalid date '{date_str}': expected YYYY-MM-DD") from e
     return parsed.timetuple().tm_yday
+
+
+def time_str_to_decimal_hour(text: str) -> float:
+    """Parse an HH:MM clock time into the decimal hour that biometeo's
+    hour_of_day parameter expects (0.0 up to just under 24.0)."""
+    try:
+        parsed = datetime.datetime.strptime(text.strip(), "%H:%M")
+    except ValueError as e:
+        raise ValueError(f"Invalid time '{text}': expected HH:MM") from e
+    return parsed.hour + parsed.minute / 60
+
+
+def decimal_hour_to_time_str(hour: float) -> str:
+    """Render a decimal hour as an HH:MM clock time, used to seed the Tmrt
+    time input with a concrete time instead of a bare decimal number."""
+    minute_index = min(1439, max(0, int(round(float(hour) * 60))))
+    return f"{minute_index // 60:02d}:{minute_index % 60:02d}"
 
 
 def humidity_target_param(sig: inspect.Signature) -> Optional[str]:
@@ -572,9 +589,8 @@ class App:
         shade_ann, shade_widget = self.param_entries.get("Is_Shaded", (None, None))
         if isinstance(hour_widget, ctk.CTkEntry) and isinstance(shade_widget, ctk.BooleanVar):
             try:
-                is_shaded, time_str = fisheye_shading_at_hour(
-                    info["timeseries"], hour_widget.get().strip()
-                )
+                decimal_hour = time_str_to_decimal_hour(hour_widget.get().strip())
+                is_shaded, time_str = fisheye_shading_at_hour(info["timeseries"], decimal_hour)
                 shade_widget.set(is_shaded)
                 shading_text = f"; Is_Shaded = {is_shaded} at {time_str}"
             except (KeyError, StopIteration, TypeError, ValueError):
@@ -691,11 +707,16 @@ class App:
                     )
                     hint_lbl.grid(row=2, column=0, columnspan=2, sticky="ew", padx=4, pady=(0, 4))
                 else:
-                    # Tmrt_calc's day_of_year param only accepts a day-of-year
-                    # integer, but users think in dates, so the form shows a
-                    # YYYY-MM-DD field and converts to day-of-year on run.
-                    is_day_of_year = name == "day_of_year"
-                    display_default = day_of_year_to_date_str(default) if is_day_of_year and default is not None else default
+                    # Tmrt_calc's day_of_year/hour_of_day params only accept a
+                    # day-of-year integer and decimal hour, but users think in
+                    # dates and clock times, so the form shows YYYY-MM-DD /
+                    # HH:MM fields and converts on run.
+                    if name == "day_of_year":
+                        display_default = day_of_year_to_date_str(default) if default is not None else None
+                    elif name == "hour_of_day":
+                        display_default = decimal_hour_to_time_str(default) if default is not None else None
+                    else:
+                        display_default = default
 
                     label_text = LABEL_ALIASES.get(name, name)
                     if required:
@@ -1064,6 +1085,20 @@ class App:
                             val = date_str_to_day_of_year(text)
                         except ValueError as e:
                             messagebox.showerror("Invalid date", str(e))
+                            return
+                    kwargs[name] = val
+                    continue
+                if name == "hour_of_day":
+                    if text == "":
+                        if p.default is inspect._empty:
+                            messagebox.showerror("Missing input", f"Required field '{name}' is empty")
+                            return
+                        val = p.default
+                    else:
+                        try:
+                            val = time_str_to_decimal_hour(text)
+                        except ValueError as e:
+                            messagebox.showerror("Invalid time", str(e))
                             return
                     kwargs[name] = val
                     continue

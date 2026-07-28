@@ -255,7 +255,8 @@ class MainScreen(Screen):
         shade_ann, shade_widget = form.param_entries.get("Is_Shaded", (None, None))
         if isinstance(hour_widget, Input) and isinstance(shade_widget, Checkbox):
             try:
-                is_shaded, time_str = fisheye_shading_at_hour(info["timeseries"], hour_widget.value.strip())
+                decimal_hour = core.time_str_to_decimal_hour(hour_widget.value.strip())
+                is_shaded, time_str = fisheye_shading_at_hour(info["timeseries"], decimal_hour)
                 shade_widget.value = is_shaded
                 shading_text = f"; Is_Shaded = {is_shaded} at {time_str}"
             except (KeyError, StopIteration, TypeError, ValueError):

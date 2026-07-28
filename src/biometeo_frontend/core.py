@@ -153,7 +153,7 @@ PARAM_GROUP_MAP: Dict[str, str] = {
 }
 LABEL_ALIASES: Dict[str, str] = {
     "day_of_year": "Date (YYYY-MM-DD)",
-    "hour_of_day": "Hour of Day",
+    "hour_of_day": "Time (HH:MM)",
     "longitude": "Longitude",
     "latitude": "Latitude",
     "sea_level_height": "Altitude",
@@ -245,6 +245,23 @@ def date_str_to_day_of_year(date_str: str) -> int:
     except ValueError as e:
         raise ValueError(f"Invalid date '{date_str}': expected YYYY-MM-DD") from e
     return parsed.timetuple().tm_yday
+
+
+def time_str_to_decimal_hour(text: str) -> float:
+    """Parse an HH:MM clock time into the decimal hour that biometeo's
+    hour_of_day parameter expects (0.0 up to just under 24.0)."""
+    try:
+        parsed = datetime.datetime.strptime(text.strip(), "%H:%M")
+    except ValueError as e:
+        raise ValueError(f"Invalid time '{text}': expected HH:MM") from e
+    return parsed.hour + parsed.minute / 60
+
+
+def decimal_hour_to_time_str(hour: float) -> str:
+    """Render a decimal hour as an HH:MM clock time, used to seed the Tmrt
+    time input with a concrete time instead of a bare decimal number."""
+    minute_index = min(1439, max(0, int(round(float(hour) * 60))))
+    return f"{minute_index // 60:02d}:{minute_index % 60:02d}"
 
 
 def humidity_target_param(sig: inspect.Signature) -> Optional[str]:

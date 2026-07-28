@@ -178,11 +178,16 @@ class ParamForm(VerticalScroll):
                     ))
                     continue
 
-                # Tmrt_calc's day_of_year param only accepts a day-of-year
-                # integer, but users think in dates, so the form shows a
-                # YYYY-MM-DD field and converts to day-of-year on run.
-                is_day_of_year = name == "day_of_year"
-                display_default = core.day_of_year_to_date_str(default) if is_day_of_year and default is not None else default
+                # Tmrt_calc's day_of_year/hour_of_day params only accept a
+                # day-of-year integer and decimal hour, but users think in
+                # dates and clock times, so the form shows YYYY-MM-DD /
+                # HH:MM fields and converts on run.
+                if name == "day_of_year":
+                    display_default = core.day_of_year_to_date_str(default) if default is not None else None
+                elif name == "hour_of_day":
+                    display_default = core.decimal_hour_to_time_str(default) if default is not None else None
+                else:
+                    display_default = default
 
                 label_text = core.LABEL_ALIASES.get(name, name)
                 label_text += " *" if required else f" ({display_default})"
@@ -320,6 +325,14 @@ class ParamForm(VerticalScroll):
                     val = p.default
                 else:
                     val = core.date_str_to_day_of_year(text)
+            elif name == "hour_of_day":
+                text = widget.value.strip()
+                if text == "":
+                    if p.default is inspect._empty:
+                        raise ValueError(f"Required field '{name}' is empty")
+                    val = p.default
+                else:
+                    val = core.time_str_to_decimal_hour(text)
             else:
                 text = widget.value.strip()
                 val = core.parse_value(text, ann)
