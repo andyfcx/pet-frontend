@@ -1,3 +1,4 @@
+import datetime
 import inspect
 import io
 import sys
@@ -168,7 +169,7 @@ PARAM_GROUP_MAP: Dict[str, str] = {
     "Is_Shaded": "meteo",
 }
 LABEL_ALIASES: Dict[str, str] = {
-    "day_of_year": "Day of Year",
+    "day_of_year": "Date (YYYY-MM-DD)",
     "hour_of_day": "Hour of Day",
     "longitude": "Longitude",
     "latitude": "Latitude",
@@ -215,6 +216,26 @@ def apply_app_icon(root: Any) -> bool:
     except Exception:
         # An unavailable window-manager icon should never prevent app startup.
         return False
+
+
+def day_of_year_to_date_str(day_of_year: int, year: Optional[int] = None) -> str:
+    """Render a day-of-year as an example YYYY-MM-DD date in `year` (defaults
+    to the current year), used to seed the Tmrt date input with a concrete
+    date instead of a bare day-of-year number.
+    """
+    if year is None:
+        year = datetime.date.today().year
+    return (datetime.date(year, 1, 1) + datetime.timedelta(days=int(day_of_year) - 1)).isoformat()
+
+
+def date_str_to_day_of_year(date_str: str) -> int:
+    """Parse a YYYY-MM-DD date string into the day-of-year integer that
+    biometeo's Tmrt_calc requires (it has no direct date parameter)."""
+    try:
+        parsed = datetime.date.fromisoformat(date_str.strip())
+    except ValueError as e:
+        raise ValueError(f"Invalid date '{date_str}': expected YYYY-MM-DD") from e
+    return parsed.timetuple().tm_yday
 
 
 def humidity_target_param(sig: inspect.Signature) -> Optional[str]:
@@ -429,9 +450,9 @@ class App:
             width=120,
             command=self.on_decimals_changed,
         )
-        self.decimals_slider.set(2)
+        self.decimals_slider.set(1)
         self.decimals_slider.pack(side="left", padx=(0, 4))
-        self.decimals_label = ctk.CTkLabel(self.output_controls, text="2", width=16)
+        self.decimals_label = ctk.CTkLabel(self.output_controls, text="1", width=16)
         self.decimals_label.pack(side="left", padx=(0, 12))
         self.save_btn = ctk.CTkButton(self.output_controls, text="Save Output", command=self.on_save_output)
         self.save_btn.pack(side="left", padx=(0, 8))
@@ -670,11 +691,17 @@ class App:
                     )
                     hint_lbl.grid(row=2, column=0, columnspan=2, sticky="ew", padx=4, pady=(0, 4))
                 else:
+                    # Tmrt_calc's day_of_year param only accepts a day-of-year
+                    # integer, but users think in dates, so the form shows a
+                    # YYYY-MM-DD field and converts to day-of-year on run.
+                    is_day_of_year = name == "day_of_year"
+                    display_default = day_of_year_to_date_str(default) if is_day_of_year and default is not None else default
+
                     label_text = LABEL_ALIASES.get(name, name)
                     if required:
                         label_text += " *"
                     else:
-                        label_text += f" ({default})"
+                        label_text += f" ({display_default})"
                     lbl = ctk.CTkLabel(
                         section, text=label_text, anchor="w", justify="left",
                         font=label_font, wraplength=col_width - 12,
@@ -688,8 +715,8 @@ class App:
                         self.param_entries[name] = ("bool", var)
                     else:
                         entry = ctk.CTkEntry(section, width=col_width - 18)
-                        if default is not None:
-                            entry.insert(0, str(default))
+                        if display_default is not None:
+                            entry.insert(0, str(display_default))
                         entry.grid(row=row + 1, column=col, sticky="w", padx=6, pady=(0, 4))
                         self.param_entries[name] = (ann, entry)
                         if name == "OmegaF":
@@ -1026,6 +1053,20 @@ class App:
                 continue
             if isinstance(widget, ctk.CTkEntry):
                 text = widget.get().strip()
+                if name == "day_of_year":
+                    if text == "":
+                        if p.default is inspect._empty:
+                            messagebox.showerror("Missing input", f"Required field '{name}' is empty")
+                            return
+                        val = p.default
+                    else:
+                        try:
+                            val = date_str_to_day_of_year(text)
+                        except ValueError as e:
+                            messagebox.showerror("Invalid date", str(e))
+                            return
+                    kwargs[name] = val
+                    continue
                 val = parse_value(text, ann)
                 if (text == "" or val is None) and p.default is inspect._empty:
                     messagebox.showerror("Missing input", f"Required field '{name}' is empty")
@@ -1092,6 +1133,10 @@ class App:
         # Dicts
         elif isinstance(first, dict):
             df = pd.DataFrame(results)
+            # biometeo's PET() names its primary output key "PET_v"; the other
+            # functions already name theirs after the function (e.g. mPET's
+            # "mPET" key), so align PET with that convention for display.
+            df = df.rename(columns={"PET_v": "PET"})
         # Tuples/lists
         elif isinstance(first, (list, tuple)):
             max_len = max(len(r) if isinstance(r, (list, tuple)) else 1 for r in results)
@@ -1114,7 +1159,7 @@ class App:
         try:
             return max(0, round(self.decimals_slider.get()))
         except (ValueError, AttributeError):
-            return 2
+            return 1
 
     def on_decimals_changed(self, _value: float = None):
         decimals = self.get_decimals()

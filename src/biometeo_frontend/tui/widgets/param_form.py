@@ -178,14 +178,20 @@ class ParamForm(VerticalScroll):
                     ))
                     continue
 
+                # Tmrt_calc's day_of_year param only accepts a day-of-year
+                # integer, but users think in dates, so the form shows a
+                # YYYY-MM-DD field and converts to day-of-year on run.
+                is_day_of_year = name == "day_of_year"
+                display_default = core.day_of_year_to_date_str(default) if is_day_of_year and default is not None else default
+
                 label_text = core.LABEL_ALIASES.get(name, name)
-                label_text += " *" if required else f" ({default})"
+                label_text += " *" if required else f" ({display_default})"
 
                 if ann in (bool, "bool") or isinstance(default, bool):
                     widget = Checkbox(value=bool(default) if default is not None else False)
                     self.param_entries[name] = ("bool", widget)
                 else:
-                    widget = GridInput(value="" if default is None else str(default), owner_form=self)
+                    widget = GridInput(value="" if display_default is None else str(display_default), owner_form=self)
                     self.param_entries[name] = (ann, widget)
 
                 field_widgets.append(widget)
@@ -306,6 +312,14 @@ class ParamForm(VerticalScroll):
                 continue
             if isinstance(widget, Checkbox):
                 val = widget.value
+            elif name == "day_of_year":
+                text = widget.value.strip()
+                if text == "":
+                    if p.default is inspect._empty:
+                        raise ValueError(f"Required field '{name}' is empty")
+                    val = p.default
+                else:
+                    val = core.date_str_to_day_of_year(text)
             else:
                 text = widget.value.strip()
                 val = core.parse_value(text, ann)

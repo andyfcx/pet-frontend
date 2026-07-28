@@ -157,7 +157,7 @@ class MainScreen(Screen):
             yield Label("Decimals:")
             yield Select(
                 [(str(value), value) for value in range(9)],
-                value=2,
+                value=1,
                 allow_blank=False,
                 compact=True,
                 id="decimals-select",
@@ -473,7 +473,7 @@ class MainScreen(Screen):
         try:
             return max(0, min(8, int(value)))
         except (TypeError, ValueError):
-            return 2
+            return 1
 
     def _open_save_picker(self) -> None:
         if self.current_output_df is None or self.current_output_df.empty:

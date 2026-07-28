@@ -3,6 +3,7 @@ Textual TUI (tui/). Nothing in this module imports tkinter, customtkinter, or
 textual, so it can be used by either front end unchanged.
 """
 
+import datetime
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -151,7 +152,7 @@ PARAM_GROUP_MAP: Dict[str, str] = {
     "Is_Shaded": "meteo",
 }
 LABEL_ALIASES: Dict[str, str] = {
-    "day_of_year": "Day of Year",
+    "day_of_year": "Date (YYYY-MM-DD)",
     "hour_of_day": "Hour of Day",
     "longitude": "Longitude",
     "latitude": "Latitude",
@@ -224,6 +225,26 @@ def parse_value(text: str, annotation: Any) -> Any:
         return int(s)
     except Exception:
         return s
+
+
+def day_of_year_to_date_str(day_of_year: int, year: Optional[int] = None) -> str:
+    """Render a day-of-year as an example YYYY-MM-DD date in `year` (defaults
+    to the current year), used to seed the Tmrt date input with a concrete
+    date instead of a bare day-of-year number.
+    """
+    if year is None:
+        year = datetime.date.today().year
+    return (datetime.date(year, 1, 1) + datetime.timedelta(days=int(day_of_year) - 1)).isoformat()
+
+
+def date_str_to_day_of_year(date_str: str) -> int:
+    """Parse a YYYY-MM-DD date string into the day-of-year integer that
+    biometeo's Tmrt_calc requires (it has no direct date parameter)."""
+    try:
+        parsed = datetime.date.fromisoformat(date_str.strip())
+    except ValueError as e:
+        raise ValueError(f"Invalid date '{date_str}': expected YYYY-MM-DD") from e
+    return parsed.timetuple().tm_yday
 
 
 def humidity_target_param(sig: inspect.Signature) -> Optional[str]:
@@ -322,6 +343,10 @@ def normalize_results(results: List[Any], fn_name: str = "result") -> pd.DataFra
     # Dicts
     elif isinstance(first, dict):
         df = pd.DataFrame(results)
+        # biometeo's PET() names its primary output key "PET_v"; the other
+        # functions already name theirs after the function (e.g. mPET's
+        # "mPET" key), so align PET with that convention for display.
+        df = df.rename(columns={"PET_v": "PET"})
     # Tuples/lists
     elif isinstance(first, (list, tuple)):
         max_len = max(len(r) if isinstance(r, (list, tuple)) else 1 for r in results)
