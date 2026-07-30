@@ -93,6 +93,25 @@ echo "Creating build virtualenv with Python ${PYTHON_VERSION}"
 rm -rf "${VENV_DIR}"
 uv venv --python "${PYTHON_BIN}" "${VENV_DIR}"
 
+NUMPY_TARGET_PLATFORM="x86_64-apple-darwin"
+if [[ "${TARGET_ARCH}" == "arm64" ]]; then
+  NUMPY_TARGET_PLATFORM="aarch64-apple-darwin"
+fi
+
+# NumPy >=2.0 publishes two macOS wheels per architecture: an older one
+# (tagged macosx_10_13/11_0) and a newer one (tagged macosx_14_0) that links
+# Apple Accelerate's "new LAPACK" ILP64 symbols, which only exist on macOS
+# >=13.3. Our GitHub Actions runners are themselves newer than 13.3, so a
+# plain `uv pip install` picks the newer tag by default, silently raising the
+# app's real minimum macOS version above LSMinimumSystemVersion and crashing
+# with "Symbol not found: _cblas_caxpy$NEWLAPACK$ILP64" on older Macs.
+# Installing numpy first against an explicit target platform/deployment
+# target forces the older, broadly-compatible wheel; the project install
+# below then leaves it in place since it already satisfies pandas's
+# requirement on numpy.
+echo "Installing numpy pinned to a macOS 12-compatible wheel"
+MACOSX_DEPLOYMENT_TARGET=12.0 uv pip install --python "${VENV_DIR}/bin/python" --python-platform "${NUMPY_TARGET_PLATFORM}" numpy
+
 echo "Installing build dependencies"
 "${UV_PIP_RUNNER[@]}" . pyinstaller
 
